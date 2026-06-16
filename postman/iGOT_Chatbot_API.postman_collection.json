@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
     "name": "iGOT Deterministic Chatbot API",
-    "description": "## Quick setup\n\n1. Set collection variables: `base_url` (default `http://localhost:8000`) and `auth_token`.\n2. **Local dev:** set `AUTH_DISABLED=true` in `.env` and use any UUID as `auth_token`.\n3. **Production / UAT:** set `AUTH_DISABLED=false` and paste a real Keycloak JWT as `auth_token`.\n\n## Typical flow\n```\nGET  /sessions/mine        → null? start fresh : resume\nPOST /sessions             → get session_id (auto-saved by test script)\nGET  /sessions/{id}        → restore last state on re-open\nPOST /sessions/{id}/turn   → repeat until response has type:end\n```",
+    "description": "## Quick setup\n\n1. Set collection variables: `base_url` (default `http://localhost:8000`) and `auth_token`.\n2. **Local dev:** set `AUTH_DISABLED=true` in `.env` and use any UUID as `auth_token`.\n3. **Production / UAT:** set `AUTH_DISABLED=false` and paste a real Keycloak JWT as `auth_token`.\n\n## Typical flow\n```\nGET  /sessions/mine              → session found? go to history : start fresh\nGET  /sessions/{id}/history      → messages non-empty? resume : start fresh\nPOST /sessions                   → start fresh (get session_id, auto-saved)\nPOST /sessions/{id}/turn         → repeat until response has type:end\n```\n\n## Activity type → next action mapping\n\nEvery `/turn` response has `activities[]`. Each entry has a `type` field:\n\n| Response activity type | What to render | Next action to send |\n|---|---|---|\n| `markdown` | Chat bubble with Markdown | Nothing — render and wait for the next activity |\n| `quick_replies` | Row of tappable buttons | `select_choice` with `choice_id` from `choices[].id` |\n| `picker` | Searchable scrollable list | `pick_item` with `picker_id`, `item_id`, `item_label` from the picker |\n| `input` | Free-text input box | `send_message` with `text` = what the user typed |\n| `end` | End-of-conversation banner | Nothing — session is over |\n| `text` | Plain text bubble (no Markdown) | Only sent on **session expiry** — call `POST /sessions` to restart |\n| `typing` | Loading animation | Not emitted by any current flow — reserved for future streaming |\n\n**Multiple activities in one response:** render all of them top-to-bottom, then send ONE action in reply to the last interactive one (quick_replies / picker / input). markdown and typing activities don't need a reply on their own.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -79,7 +79,7 @@
               "host": ["{{base_url}}"],
               "path": ["ai-chatbot", "v1", "sessions", "mine"]
             },
-            "description": "Call this first on every app open.\n\n**Response — session found:**\n```json\n{ \"session_id\": \"<uuid>\", \"status\": \"in_flow\", \"flow_id\": \"AUTO_LOGOUT_CRASH\" }\n```\n→ Call GET /sessions/{id} next to restore the conversation.\n\n**Response — no active session:**\n```json\n{ \"session_id\": null }\n```\n→ Call POST /sessions to start fresh.\n\nAlways returns 200 — never errors. Returns null when Redis is unavailable (safe fallback)."
+            "description": "Call this first on every app open.\n\n**Response — session found:**\n```json\n{ \"session_id\": \"<uuid>\", \"status\": \"in_flow\", \"flow_id\": \"AUTO_LOGOUT_CRASH\" }\n```\n→ Call GET /sessions/{id}/history next.\n- messages[] non-empty → render thread, last role:bot entry = current prompt\n- messages[] empty → call POST /sessions instead (user hadn't picked a topic yet)\n\n**Response — no active session:**\n```json\n{ \"session_id\": null }\n```\n→ Call POST /sessions to start fresh.\n\nAlways returns 200 — never errors. Returns null when Redis is unavailable (safe fallback)."
           },
           "response": []
         },
@@ -119,7 +119,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"channel\": \"web\",\n  \"language\": \"en\"\n}",
+              "raw": "{\n  // \"web\" | \"mobile\" | \"whatsapp\" | \"voice\" — the channel the user is on\n  \"channel\": \"web\",\n  // BCP-47 language code — \"en\" for English, \"hi\" for Hindi\n  \"language\": \"en\"\n}",
               "options": { "raw": { "language": "json" } }
             },
             "url": {
@@ -128,26 +128,6 @@
               "path": ["ai-chatbot", "v1", "sessions"]
             },
             "description": "Creates a new chat session. Call this when GET /sessions/mine returns null.\n\n`channel`: `web` | `mobile` | `whatsapp` | `voice`\n`language`: `en` | `hi` | any BCP-47 code\n\n**Response contains:**\n- `session_id` — save this, used in every subsequent request (auto-saved by test script)\n- `activities[]` — greeting message + topic picker (14 topics as quick_reply buttons)\n- `status: \"awaiting_user\"`\n\nNext: call POST /sessions/{session_id}/turn with the topic the user picks."
-          },
-          "response": []
-        },
-        {
-          "name": "Restore session (GET /sessions/{id})",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "x-authenticated-user-token",
-                "value": "{{auth_token}}",
-                "type": "text"
-              }
-            ],
-            "url": {
-              "raw": "{{base_url}}/ai-chatbot/v1/sessions/{{session_id}}",
-              "host": ["{{base_url}}"],
-              "path": ["ai-chatbot", "v1", "sessions", "{{session_id}}"]
-            },
-            "description": "Restores a session after app re-open. Call this when GET /sessions/mine returns a session_id.\n\n`{{session_id}}` — comes from GET /sessions/mine response (auto-saved by that request's test script).\n\n**Response contains:**\n- Same `activities[]` the user last saw — render these to restore the conversation\n- `current_node` — which step in the flow the user is on\n- `flow_id` — which flow is active\n\nErrors:\n- `404` — session not found → start a new session\n- `410` — session expired (TTL elapsed) → start a new session\n- `403` — wrong user (session belongs to a different user)"
           },
           "response": []
         },
@@ -185,7 +165,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"action\": \"select_choice\",\n  \"choice_id\": \"REPLACE_WITH_CHOICE_ID\"\n}",
+              "raw": "{\n  // ── PICK ONE action type — delete the other two before sending ────────────\n\n  // select_choice: user tapped a quick-reply button\n  //   \"action\": \"select_choice\",\n  //   \"choice_id\": \"<id>\",     // from previous response → activities[].choices[].id\n  //   \"user_says\": \"<label>\"   // optional — the button label for the transcript\n\n  // send_message: user typed free text (only when disable_input is false)\n  //   \"action\": \"send_message\",\n  //   \"text\": \"<user typed text>\"\n\n  // pick_item: user selected from a dynamic list (course picker, etc.)\n  //   \"action\": \"pick_item\",\n  //   \"picker_id\": \"<id>\",     // from previous response → activities[].picker_id\n  //   \"item_id\":    \"<id>\",    // from previous response → activities[].items[n].id\n  //   \"item_label\": \"<label>\"  // from previous response → activities[].items[n].label\n\n  // ── Active example (select_choice) ─────────────────────────────────────\n  // \"select_choice\" — user tapped a quick-reply button; choice_id MUST come from the previous response\n  \"action\": \"select_choice\",\n  // From previous response → activities[].choices[].id  (NEVER hardcode)\n  \"choice_id\": \"REPLACE_WITH_CHOICE_ID\",\n  // Optional — the button label shown in the UI (for conversation transcript)\n  \"user_says\": \"REPLACE_WITH_BUTTON_LABEL\"\n}",
               "options": { "raw": { "language": "json" } }
             },
             "url": {
@@ -270,7 +250,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"channel\": \"web\",\n  \"language\": \"en\"\n}",
+              "raw": "{\n  // \"web\" | \"mobile\" | \"whatsapp\" | \"voice\" — the channel the user is on\n  \"channel\": \"web\",\n  // BCP-47 language code — \"en\" for English, \"hi\" for Hindi\n  \"language\": \"en\"\n}",
               "options": { "raw": { "language": "json" } }
             },
             "url": {
@@ -292,7 +272,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"action\": \"select_choice\",\n  // choice_id comes from Step 1 response → activities[1].choices[].id\n  \"choice_id\": \"AUTO_LOGOUT_CRASH\",\n  \"user_says\": \"Auto logout / App crash\"\n}",
+              "raw": "{\n  // \"select_choice\" — user tapped a quick-reply button; choice_id MUST come from the previous response\n  \"action\": \"select_choice\",\n  // choice_id comes from Step 1 response → activities[1].choices[].id\n  \"choice_id\": \"AUTO_LOGOUT_CRASH\",\n  // Optional — the button label shown in the UI (for conversation transcript)\n  \"user_says\": \"Auto logout / App crash\"\n}",
               "options": { "raw": { "language": "json" } }
             },
             "url": {
@@ -314,7 +294,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"action\": \"select_choice\",\n  // choice_id comes from Step 2 response → activities[1].choices[].id\n  \"choice_id\": \"android\",\n  \"user_says\": \"Android\"\n}",
+              "raw": "{\n  // \"select_choice\" — user tapped a quick-reply button; choice_id MUST come from the previous response\n  \"action\": \"select_choice\",\n  // choice_id comes from Step 2 response → activities[1].choices[].id\n  \"choice_id\": \"android\",\n  // Optional — the button label shown in the UI (for conversation transcript)\n  \"user_says\": \"Android\"\n}",
               "options": { "raw": { "language": "json" } }
             },
             "url": {
@@ -336,7 +316,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"action\": \"select_choice\",\n  // choice_id comes from Step 3 response → activities[2].choices[].id\n  \"choice_id\": \"yes\",\n  \"user_says\": \"Yes, issue is resolved\"\n}",
+              "raw": "{\n  // \"select_choice\" — user tapped a quick-reply button; choice_id MUST come from the previous response\n  \"action\": \"select_choice\",\n  // choice_id comes from Step 3 response → activities[2].choices[].id\n  \"choice_id\": \"yes\",\n  // Optional — the button label shown in the UI (for conversation transcript)\n  \"user_says\": \"Yes, issue is resolved\"\n}",
               "options": { "raw": { "language": "json" } }
             },
             "url": {
@@ -423,7 +403,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"channel\": \"web\",\n  \"language\": \"en\"\n}",
+              "raw": "{\n  // \"web\" | \"mobile\" | \"whatsapp\" | \"voice\" — the channel the user is on\n  \"channel\": \"web\",\n  // BCP-47 language code — \"en\" for English, \"hi\" for Hindi\n  \"language\": \"en\"\n}",
               "options": { "raw": { "language": "json" } }
             },
             "url": {
@@ -445,7 +425,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"action\": \"select_choice\",\n  // choice_id from Step 1 response → activities[1].choices[].id\n  \"choice_id\": \"CERTIFICATE_DOWNLOAD\",\n  \"user_says\": \"Certificate issue\"\n}",
+              "raw": "{\n  // \"select_choice\" — user tapped a quick-reply button; choice_id MUST come from the previous response\n  \"action\": \"select_choice\",\n  // choice_id from Step 1 response → activities[1].choices[].id\n  \"choice_id\": \"CERTIFICATE_DOWNLOAD\",\n  // Optional — the button label shown in the UI (for conversation transcript)\n  \"user_says\": \"Certificate issue\"\n}",
               "options": { "raw": { "language": "json" } }
             },
             "url": {
@@ -467,7 +447,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"action\": \"select_choice\",\n  // choice_id from Step 2 response → activities[1].choices[].id\n  \"choice_id\": \"C1\",\n  \"user_says\": \"Certificate not generated / not received\"\n}",
+              "raw": "{\n  // \"select_choice\" — user tapped a quick-reply button; choice_id MUST come from the previous response\n  \"action\": \"select_choice\",\n  // choice_id from Step 2 response → activities[1].choices[].id\n  \"choice_id\": \"C1\",\n  // Optional — the button label shown in the UI (for conversation transcript)\n  \"user_says\": \"Certificate not generated / not received\"\n}",
               "options": { "raw": { "language": "json" } }
             },
             "url": {
@@ -489,7 +469,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"action\": \"pick_item\",\n  // picker_id from Step 3 response → activities[1].picker_id\n  \"picker_id\": \"collected.c1_course_id\",\n  // item_id and item_label from Step 3 response → activities[1].items[n]\n  \"item_id\": \"REPLACE_WITH_COURSE_ID_FROM_ITEMS\",\n  \"item_label\": \"REPLACE_WITH_COURSE_NAME_FROM_ITEMS\"\n}",
+              "raw": "{\n  // \"pick_item\" — user selected from a dynamic picker list; picker_id, item_id, item_label all come from the previous response\n  \"action\": \"pick_item\",\n  // picker_id from Step 3 response → activities[1].picker_id\n  \"picker_id\": \"collected.c1_course_id\",\n  // item_id and item_label from Step 3 response → activities[1].items[n]\n  \"item_id\": \"REPLACE_WITH_COURSE_ID_FROM_ITEMS\",\n  \"item_label\": \"REPLACE_WITH_COURSE_NAME_FROM_ITEMS\"\n}",
               "options": { "raw": { "language": "json" } }
             },
             "url": {
@@ -511,7 +491,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"action\": \"select_choice\",\n  // choice_id from Step 4 response → activities[last].choices[].id\n  \"choice_id\": \"yes\",\n  \"user_says\": \"Yes, resolved\"\n}",
+              "raw": "{\n  // \"select_choice\" — user tapped a quick-reply button; choice_id MUST come from the previous response\n  \"action\": \"select_choice\",\n  // choice_id from Step 4 response → activities[last].choices[].id\n  \"choice_id\": \"yes\",\n  // Optional — the button label shown in the UI (for conversation transcript)\n  \"user_says\": \"Yes, resolved\"\n}",
               "options": { "raw": { "language": "json" } }
             },
             "url": {
@@ -552,7 +532,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"channel\": \"web\",\n  \"language\": \"en\"\n}",
+              "raw": "{\n  // \"web\" | \"mobile\" | \"whatsapp\" | \"voice\" — the channel the user is on\n  \"channel\": \"web\",\n  // BCP-47 language code — \"en\" for English, \"hi\" for Hindi\n  \"language\": \"en\"\n}",
               "options": { "raw": { "language": "json" } }
             },
             "url": {
@@ -574,7 +554,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"action\": \"select_choice\",\n  // choice_id from Step 1 response → activities[1].choices[].id\n  \"choice_id\": \"CERTIFICATE_DOWNLOAD\",\n  \"user_says\": \"Certificate issue\"\n}",
+              "raw": "{\n  // \"select_choice\" — user tapped a quick-reply button; choice_id MUST come from the previous response\n  \"action\": \"select_choice\",\n  // choice_id from Step 1 response → activities[1].choices[].id\n  \"choice_id\": \"CERTIFICATE_DOWNLOAD\",\n  // Optional — the button label shown in the UI (for conversation transcript)\n  \"user_says\": \"Certificate issue\"\n}",
               "options": { "raw": { "language": "json" } }
             },
             "url": {
@@ -596,7 +576,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"action\": \"select_choice\",\n  // choice_id from Step 2 response → activities[1].choices[].id\n  \"choice_id\": \"C3\",\n  \"user_says\": \"Incorrect name on certificate\"\n}",
+              "raw": "{\n  // \"select_choice\" — user tapped a quick-reply button; choice_id MUST come from the previous response\n  \"action\": \"select_choice\",\n  // choice_id from Step 2 response → activities[1].choices[].id\n  \"choice_id\": \"C3\",\n  // Optional — the button label shown in the UI (for conversation transcript)\n  \"user_says\": \"Incorrect name on certificate\"\n}",
               "options": { "raw": { "language": "json" } }
             },
             "url": {
@@ -618,7 +598,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"action\": \"pick_item\",\n  // picker_id from Step 3 response → activities[1].picker_id\n  \"picker_id\": \"collected.c3_course_id\",\n  // item_id and item_label from Step 3 response → activities[1].items[n]\n  \"item_id\": \"REPLACE_WITH_COURSE_ID_FROM_ITEMS\",\n  \"item_label\": \"REPLACE_WITH_COURSE_NAME_FROM_ITEMS\"\n}",
+              "raw": "{\n  // \"pick_item\" — user selected from a dynamic picker list; picker_id, item_id, item_label all come from the previous response\n  \"action\": \"pick_item\",\n  // picker_id from Step 3 response → activities[1].picker_id\n  \"picker_id\": \"collected.c3_course_id\",\n  // item_id and item_label from Step 3 response → activities[1].items[n]\n  \"item_id\": \"REPLACE_WITH_COURSE_ID_FROM_ITEMS\",\n  \"item_label\": \"REPLACE_WITH_COURSE_NAME_FROM_ITEMS\"\n}",
               "options": { "raw": { "language": "json" } }
             },
             "url": {
@@ -640,7 +620,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"action\": \"select_choice\",\n  // choice_id from Step 4 response → activities[last].choices[].id\n  \"choice_id\": \"yes\",\n  \"user_says\": \"Yes, update the name\"\n}",
+              "raw": "{\n  // \"select_choice\" — user tapped a quick-reply button; choice_id MUST come from the previous response\n  \"action\": \"select_choice\",\n  // choice_id from Step 4 response → activities[last].choices[].id\n  \"choice_id\": \"yes\",\n  // Optional — the button label shown in the UI (for conversation transcript)\n  \"user_says\": \"Yes, update the name\"\n}",
               "options": { "raw": { "language": "json" } }
             },
             "url": {
@@ -648,7 +628,7 @@
               "host": ["{{base_url}}"],
               "path": ["ai-chatbot", "v1", "sessions", "{{session_id}}", "turn"]
             },
-            "description": "Response: bot asks 'Please enter your correct First Name (as per government ID):'\n- disable_input will be false → free text input enabled\n- Next action: send_message with the first name (Step 6)"
+            "description": "Response contains TWO activities — this is the input type pattern:\n```json\n[\n  { \"type\": \"markdown\", \"content\": \"Please enter your correct **First Name** (as per government ID):\" },\n  { \"type\": \"input\", \"input_id\": \"collected.c3_new_first_name\", \"input_placeholder\": \"\" }\n]\n```\n\nRendering rule for `type: input`:\n1. Render the preceding `markdown` activity as a chat bubble (the question)\n2. Render the `input` activity as a free-text input box\n3. When the user submits → send `send_message` with `text: <what they typed>` (Step 6)\n\n`input_id` tells you which field is being collected — useful if you want to apply client-side validation (e.g. email pattern check before sending)."
           },
           "response": []
         },
@@ -662,7 +642,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"action\": \"send_message\",\n  // Free text — user types their correct first name\n  \"text\": \"Ramesh\"\n}",
+              "raw": "{\n  // \"send_message\" — user typed free text; only valid when disable_input is false in the previous response\n  \"action\": \"send_message\",\n  // Free text — user types their correct first name\n  \"text\": \"Ramesh\"\n}",
               "options": { "raw": { "language": "json" } }
             },
             "url": {
@@ -670,7 +650,7 @@
               "host": ["{{base_url}}"],
               "path": ["ai-chatbot", "v1", "sessions", "{{session_id}}", "turn"]
             },
-            "description": "action: send_message — used whenever the bot shows a text input (disable_input: false with no quick_replies).\ntext: whatever the user types — replace 'Ramesh' with the actual name.\n\nResponse: bot asks 'Please enter your correct Last Name (as per government ID)'"
+            "description": "Responding to the `type: input` activity from Step 5.\n\n`action: send_message` is the correct action whenever the previous response contained `type: input`. The `text` field is whatever the user typed in the input box.\n\nResponse: another markdown + input pair asking for the Last Name (same pattern as Step 5 — repeat with Step 7)."
           },
           "response": []
         },
@@ -684,7 +664,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"action\": \"send_message\",\n  // Free text — user types their correct last name\n  \"text\": \"Kumar\"\n}",
+              "raw": "{\n  // \"send_message\" — user typed free text; only valid when disable_input is false in the previous response\n  \"action\": \"send_message\",\n  // Free text — user types their correct last name\n  \"text\": \"Kumar\"\n}",
               "options": { "raw": { "language": "json" } }
             },
             "url": {
@@ -692,7 +672,7 @@
               "host": ["{{base_url}}"],
               "path": ["ai-chatbot", "v1", "sessions", "{{session_id}}", "turn"]
             },
-            "description": "Response: name confirmation showing:\n'Change certificate name from: <old> to: <new>. Shall we proceed?'\n- choices: yes (confirm) / no (re-enter name)\n\nSend 'yes' → Step 8 (API update)\nSend 'no' → bot re-asks for first name (repeat from Step 6)"
+            "description": "Responding to the `type: input` activity from Step 6.\n\nSame pattern as Step 6 — `action: send_message`, `text` is the user's last name.\n\nResponse: name confirmation with `quick_replies`:\n'Change certificate name from: <old> to: Ramesh Kumar. Shall we proceed?'\n- choices: yes (confirm) / no (re-enter name)\n\nSend 'yes' → Step 8 (API update)\nSend 'no' → bot re-asks for first name (repeat from Step 6)"
           },
           "response": []
         },
@@ -706,7 +686,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"action\": \"select_choice\",\n  // choice_id from Step 7 response → activities[last].choices[].id\n  \"choice_id\": \"yes\",\n  \"user_says\": \"Yes, confirm change\"\n}",
+              "raw": "{\n  // \"select_choice\" — user tapped a quick-reply button; choice_id MUST come from the previous response\n  \"action\": \"select_choice\",\n  // choice_id from Step 7 response → activities[last].choices[].id\n  \"choice_id\": \"yes\",\n  // Optional — the button label shown in the UI (for conversation transcript)\n  \"user_says\": \"Yes, confirm change\"\n}",
               "options": { "raw": { "language": "json" } }
             },
             "url": {
@@ -728,7 +708,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"action\": \"select_choice\",\n  // choice_id from Step 8 response → activities[last].choices[].id\n  \"choice_id\": \"yes\",\n  \"user_says\": \"Yes, resolved\"\n}",
+              "raw": "{\n  // \"select_choice\" — user tapped a quick-reply button; choice_id MUST come from the previous response\n  \"action\": \"select_choice\",\n  // choice_id from Step 8 response → activities[last].choices[].id\n  \"choice_id\": \"yes\",\n  // Optional — the button label shown in the UI (for conversation transcript)\n  \"user_says\": \"Yes, resolved\"\n}",
               "options": { "raw": { "language": "json" } }
             },
             "url": {
@@ -769,7 +749,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"channel\": \"web\",\n  \"language\": \"en\"\n}",
+              "raw": "{\n  // \"web\" | \"mobile\" | \"whatsapp\" | \"voice\" — the channel the user is on\n  \"channel\": \"web\",\n  // BCP-47 language code — \"en\" for English, \"hi\" for Hindi\n  \"language\": \"en\"\n}",
               "options": { "raw": { "language": "json" } }
             },
             "url": {
@@ -791,7 +771,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"action\": \"select_choice\",\n  // choice_id from Step 1 response → activities[1].choices[].id\n  \"choice_id\": \"AUTO_LOGOUT_CRASH\",\n  \"user_says\": \"Auto logout / App crash\"\n}",
+              "raw": "{\n  // \"select_choice\" — user tapped a quick-reply button; choice_id MUST come from the previous response\n  \"action\": \"select_choice\",\n  // choice_id from Step 1 response → activities[1].choices[].id\n  \"choice_id\": \"AUTO_LOGOUT_CRASH\",\n  // Optional — the button label shown in the UI (for conversation transcript)\n  \"user_says\": \"Auto logout / App crash\"\n}",
               "options": { "raw": { "language": "json" } }
             },
             "url": {
@@ -813,7 +793,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"action\": \"select_choice\",\n  // choice_id from Step 2 response → activities[1].choices[].id\n  \"choice_id\": \"android\",\n  \"user_says\": \"Android\"\n}",
+              "raw": "{\n  // \"select_choice\" — user tapped a quick-reply button; choice_id MUST come from the previous response\n  \"action\": \"select_choice\",\n  // choice_id from Step 2 response → activities[1].choices[].id\n  \"choice_id\": \"android\",\n  // Optional — the button label shown in the UI (for conversation transcript)\n  \"user_says\": \"Android\"\n}",
               "options": { "raw": { "language": "json" } }
             },
             "url": {
@@ -855,7 +835,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"action\": \"select_choice\",\n  // choice_id from Step 3 response → activities[last].choices[].id\n  \"choice_id\": \"no\",\n  \"user_says\": \"No, issue still persists\"\n}",
+              "raw": "{\n  // \"select_choice\" — user tapped a quick-reply button; choice_id MUST come from the previous response\n  \"action\": \"select_choice\",\n  // choice_id from Step 3 response → activities[last].choices[].id\n  \"choice_id\": \"no\",\n  // Optional — the button label shown in the UI (for conversation transcript)\n  \"user_says\": \"No, issue still persists\"\n}",
               "options": { "raw": { "language": "json" } }
             },
             "url": {

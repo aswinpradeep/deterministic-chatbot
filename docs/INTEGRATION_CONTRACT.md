@@ -17,8 +17,13 @@ App opens
     ↓
 GET  /ai-chatbot/v1/sessions/mine     ← check if user has an active session
     │
-    ├─ session found → GET /ai-chatbot/v1/sessions/{id}          ← restore where they left off
-    │                  GET /ai-chatbot/v1/sessions/{id}/history  ← (optional) render full thread
+    ├─ session found → GET /ai-chatbot/v1/sessions/{id}/history
+    │                      │
+    │                      ├─ messages[] non-empty → render full thread
+    │                      │                         last role:bot entry = current prompt
+    │                      │
+    │                      └─ messages[] empty     → POST /ai-chatbot/v1/sessions
+    │                                                (equivalent: user hadn't picked a topic yet)
     │
     └─ no session   → POST /ai-chatbot/v1/sessions        ← start fresh
                             ↓
@@ -72,9 +77,8 @@ GET  /ai-chatbot/v1/sessions/mine     ← check if user has an active session
 | # | Endpoint | When to call |
 |---|----------|-------------|
 | 1 | `GET /ai-chatbot/v1/sessions/mine` | On app open — check if the user has an active session |
-| 2a | `GET /ai-chatbot/v1/sessions/{id}` | Active session found — restore conversation state |
-| 2b | `POST /ai-chatbot/v1/sessions` | No active session — start a new one |
-| 2c | `GET /ai-chatbot/v1/sessions/{id}/history` | Active session found — load full conversation thread for display |
+| 2a | `GET /ai-chatbot/v1/sessions/{id}/history` | Active session found — load full conversation thread; last role:bot entry = current prompt |
+| 2b | `POST /ai-chatbot/v1/sessions` | No active session, or history returned empty (user hadn't picked a topic yet) |
 | 3 | `POST /ai-chatbot/v1/sessions/{id}/turn` | On every user action (button tap, text submit, picker selection) |
 
 The frontend **never** calls Karmayogi, Zoho, OTP, or any other backend service directly. All of that happens server-side.
@@ -89,8 +93,7 @@ The frontend **never** calls Karmayogi, Zoho, OTP, or any other backend service 
 | `POST /sessions` | Creates a new conversation — allocates session_id, shows greeting + topic menu |
 | `POST /sessions/{id}/turn` | The main conversation driver — every user tap/input goes here; server runs the flow and returns the next bot activities |
 | `GET /sessions/mine` | Cross-device resume — Redis maps user_id → session_id so any device can find the active session without the client storing anything |
-| `GET /sessions/{id}` | Pod-restart recovery — if the server restarts, in-memory state is lost; this reconstructs it from the Postgres checkpoint so turns continue working |
-| `GET /sessions/{id}/history` | Full thread display — returns every user and bot message so the UI can render a scrollable chat history, not just the last bot response |
+| `GET /sessions/{id}/history` | Resume + full thread — returns every message from start of session. The last role:bot entry is the current prompt. If messages[] is empty the user hadn't picked a topic yet — start a new session instead. |
 | `GET /admin/sessions/{id}/trace` | Debugging — full node-by-node trace of what the engine did (not yet wired) |
 | `DELETE /admin/sessions/{id}` | DPDP compliance — right-to-erasure, deletes all stored conversation data for a user (not yet wired) |
 
@@ -1557,8 +1560,7 @@ The JWT `iss` claim must match the configured `KEYCLOAK_HOST` — mismatches cau
 | `POST` | `/ai-chatbot/v1/sessions` | JWT | Start a new session |
 | `POST` | `/ai-chatbot/v1/sessions/{id}/turn` | JWT | Send user action, get bot activities |
 | `GET` | `/ai-chatbot/v1/sessions/mine` | JWT | Get caller's active session ID (Redis lookup) |
-| `GET` | `/ai-chatbot/v1/sessions/{id}` | JWT | Restore full session state |
-| `GET` | `/ai-chatbot/v1/sessions/{id}/history` | JWT | Full conversation history (chronological) |
+| `GET` | `/ai-chatbot/v1/sessions/{id}/history` | JWT | Full conversation history + resume (last role:bot entry = current prompt) |
 | `GET` | `/ai-chatbot/v1/admin/sessions/{id}/trace` | JWT | Full conversation trace *(not yet wired)* |
 | `DELETE` | `/ai-chatbot/v1/admin/sessions/{id}` | JWT | DPDP data deletion *(not yet wired)* |
 | `GET` | `/docs` | None | OpenAPI / Swagger UI |
