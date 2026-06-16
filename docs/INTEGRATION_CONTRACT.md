@@ -15,19 +15,19 @@ The chatbot is a request-response API. Every response is a list of **activities*
 ```
 App opens
     ↓
-GET  /ai-chatbot/v1/sessions/mine     ← check if user has an active session
+GET  /ai-chatbot/v1/sessions/list     ← check if user has an active session
     │
-    ├─ session found → GET /ai-chatbot/v1/sessions/{id}/history
+    ├─ session found → GET /ai-chatbot/v1/sessions/history/{id}
     │                      │
     │                      ├─ messages[] non-empty → render full thread
     │                      │                         last role:bot entry = current prompt
     │                      │
-    │                      └─ messages[] empty     → POST /ai-chatbot/v1/sessions
+    │                      └─ messages[] empty     → POST /ai-chatbot/v1/sessions/create
     │                                                (equivalent: user hadn't picked a topic yet)
     │
-    └─ no session   → POST /ai-chatbot/v1/sessions        ← start fresh
+    └─ no session   → POST /ai-chatbot/v1/sessions/create        ← start fresh
                             ↓
-              POST /ai-chatbot/v1/sessions/{id}/turn       ← one call per user action
+              POST /ai-chatbot/v1/sessions/turn/{id}       ← one call per user action
               (repeat until response contains type:"end")
 ```
 
@@ -76,10 +76,10 @@ GET  /ai-chatbot/v1/sessions/mine     ← check if user has an active session
 
 | # | Endpoint | When to call |
 |---|----------|-------------|
-| 1 | `GET /ai-chatbot/v1/sessions/mine` | On app open — check if the user has an active session |
-| 2a | `GET /ai-chatbot/v1/sessions/{id}/history` | Active session found — load full conversation thread; last role:bot entry = current prompt |
-| 2b | `POST /ai-chatbot/v1/sessions` | No active session, or history returned empty (user hadn't picked a topic yet) |
-| 3 | `POST /ai-chatbot/v1/sessions/{id}/turn` | On every user action (button tap, text submit, picker selection) |
+| 1 | `GET /ai-chatbot/v1/sessions/list` | On app open — check if the user has an active session |
+| 2a | `GET /ai-chatbot/v1/sessions/history/{id}` | Active session found — load full conversation thread; last role:bot entry = current prompt |
+| 2b | `POST /ai-chatbot/v1/sessions/create` | No active session, or history returned empty (user hadn't picked a topic yet) |
+| 3 | `POST /ai-chatbot/v1/sessions/turn/{id}` | On every user action (button tap, text submit, picker selection) |
 
 The frontend **never** calls Karmayogi, Zoho, OTP, or any other backend service directly. All of that happens server-side.
 
@@ -90,10 +90,10 @@ The frontend **never** calls Karmayogi, Zoho, OTP, or any other backend service 
 | Endpoint | Why it exists |
 |----------|--------------|
 | `GET /health` | Load balancer and k8s liveness probe — confirms the pod is up |
-| `POST /sessions` | Creates a new conversation — allocates session_id, shows greeting + topic menu |
-| `POST /sessions/{id}/turn` | The main conversation driver — every user tap/input goes here; server runs the flow and returns the next bot activities |
-| `GET /sessions/mine` | Cross-device resume — Redis maps user_id → session_id so any device can find the active session without the client storing anything |
-| `GET /sessions/{id}/history` | Resume + full thread — returns every message from start of session. The last role:bot entry is the current prompt. If messages[] is empty the user hadn't picked a topic yet — start a new session instead. |
+| `POST /sessions/create` | Creates a new conversation — allocates session_id, shows greeting + topic menu |
+| `POST /sessions/turn/{id}` | The main conversation driver — every user tap/input goes here; server runs the flow and returns the next bot activities |
+| `GET /sessions/list` | Cross-device resume — Redis maps user_id → session_id so any device can find the active session without the client storing anything |
+| `GET /sessions/history/{id}` | Resume + full thread — returns every message from start of session. The last role:bot entry is the current prompt. If messages[] is empty the user hadn't picked a topic yet — start a new session instead. |
 | `GET /admin/sessions/{id}/trace` | Debugging — full node-by-node trace of what the engine did (not yet wired) |
 | `DELETE /admin/sessions/{id}` | DPDP compliance — right-to-erasure, deletes all stored conversation data for a user (not yet wired) |
 
@@ -195,7 +195,7 @@ When `activities[]` contains `{ "type": "end" }`, the conversation is over. Show
 | `unresolved` | ⚠️ Yellow — "We'll follow up shortly" | — |
 | `ended` | ⬜ Neutral — conversation closed | — |
 
-After showing the banner, display a **"Start a new conversation"** button. On tap, call `POST /ai-chatbot/v1/sessions` to start a new session.
+After showing the banner, display a **"Start a new conversation"** button. On tap, call `POST /ai-chatbot/v1/sessions/create` to start a new session.
 
 ---
 
@@ -204,18 +204,18 @@ After showing the banner, display a **"Start a new conversation"** button. On ta
 ```
 On app / page load
 ──────────────────
-1. Call GET /ai-chatbot/v1/sessions/mine
+1. Call GET /ai-chatbot/v1/sessions/list
 2. If response.session_id is not null:
      Call GET /ai-chatbot/v1/sessions/{session_id}
      Render the returned activities — user continues where they left off
 3. If response.session_id is null (no active session, expired, or Redis unavailable):
-     Call POST /ai-chatbot/v1/sessions  { "channel": "web", "language": "en" }
+     Call POST /ai-chatbot/v1/sessions/create  { "channel": "web", "language": "en" }
      Save response.session_id to localStorage
      Render response.activities[]
 
 On every user action (button tap / text submit / picker select)
 ──────────────────────────────────────────────────────────────
-1. POST /ai-chatbot/v1/sessions/{session_id}/turn  { action + payload }
+1. POST /ai-chatbot/v1/sessions/turn/{session_id}  { action + payload }
 2. Render all activities[] in order
 3. If any activity has type = "end":
      show outcome banner
@@ -249,19 +249,19 @@ The iGOT Deterministic Chatbot is a **structured chatbot API**. Every response i
 ```
 Frontend                          iGOT Deterministic Chatbot API
    |                                  |
-   |  POST /ai-chatbot/v1/sessions             |  ← start a new session
+   |  POST /ai-chatbot/v1/sessions/create             |  ← start a new session
    |  ─────────────────────────────→  |
    |  ←─────────────────────────────  |  → [markdown greeting, quick_replies (12 topics)]
    |                                  |
-   |  POST /ai-chatbot/v1/sessions/{id}/turn   |  ← user picks topic
+   |  POST /ai-chatbot/v1/sessions/turn/{id}   |  ← user picks topic
    |  ─────────────────────────────→  |
    |  ←─────────────────────────────  |  → [markdown, quick_replies] or [picker] or [input]
    |                                  |
-   |  POST /ai-chatbot/v1/sessions/{id}/turn   |  ← user responds
+   |  POST /ai-chatbot/v1/sessions/turn/{id}   |  ← user responds
    |  ─────────────────────────────→  |
    |  ←─────────────────────────────  |  → ... (repeat)
    |                                  |
-   |  POST /ai-chatbot/v1/sessions/{id}/turn   |  ← last user action
+   |  POST /ai-chatbot/v1/sessions/turn/{id}   |  ← last user action
    |  ─────────────────────────────→  |
    |  ←─────────────────────────────  |  → [markdown, end]   ← conversation complete
 ```
@@ -326,7 +326,7 @@ curl -X POST http://localhost:8000/ai-chatbot/v1/sessions \
 ### Phase 1 — Start a session
 
 ```
-POST /ai-chatbot/v1/sessions
+POST /ai-chatbot/v1/sessions/create
 ```
 
 **Request body:**
@@ -387,14 +387,14 @@ curl -s -X POST http://localhost:8000/ai-chatbot/v1/sessions \
 }
 ```
 
-> **Frontend:** Save `session_id` to localStorage immediately. Use `GET /sessions/mine` on next app open to resume. Hide the free-text input box when `disable_input: true` — the user must pick a button.
+> **Frontend:** Save `session_id` to localStorage immediately. Use `GET /sessions/list` on next app open to resume. Hide the free-text input box when `disable_input: true` — the user must pick a button.
 
 ---
 
 ### Phase 2 — Send turns
 
 ```
-POST /ai-chatbot/v1/sessions/{session_id}/turn
+POST /ai-chatbot/v1/sessions/turn/{session_id}
 ```
 
 Repeat until the response contains a `{ "type": "end" }` activity.
@@ -403,7 +403,7 @@ Repeat until the response contains a `{ "type": "end" }` activity.
 
 | Param | Type | Description |
 |-------|------|-------------|
-| `session_id` | UUID | From the `session_id` returned by `POST /ai-chatbot/v1/sessions` |
+| `session_id` | UUID | From the `session_id` returned by `POST /ai-chatbot/v1/sessions/create` |
 
 **Request body:** See §4 for full action reference.
 
@@ -424,7 +424,7 @@ Repeat until the response contains a `{ "type": "end" }` activity.
 
 When `activities` contains `{ "type": "end" }`, the session is complete.
 - Show the `content` message and outcome banner
-- Offer a "Start over" button — clicking it calls `POST /ai-chatbot/v1/sessions` again (new session)
+- Offer a "Start over" button — clicking it calls `POST /ai-chatbot/v1/sessions/create` again (new session)
 - Do **not** send further turns to the same session — the server will respond with a "conversation ended" message
 
 ---
@@ -574,7 +574,7 @@ curl -s -X POST http://localhost:8000/ai-chatbot/v1/sessions/550e8400.../turn \
   -d '{"action": "start"}'
 ```
 
-> **Preferred:** create a new session via `POST /ai-chatbot/v1/sessions` instead of sending `start`. This gives a clean state.
+> **Preferred:** create a new session via `POST /ai-chatbot/v1/sessions/create` instead of sending `start`. This gives a clean state.
 
 ---
 
@@ -770,7 +770,7 @@ Same fields as `markdown` but render as plain text — no Markdown parsing.
 
 **After `end`:**
 - The session is complete — do not send more turns
-- Show a "Start over" / "Back to menu" button that calls `POST /ai-chatbot/v1/sessions` (new session)
+- Show a "Start over" / "Back to menu" button that calls `POST /ai-chatbot/v1/sessions/create` (new session)
 - Do NOT call the same session again
 
 ---
@@ -855,8 +855,8 @@ All errors follow standard HTTP + JSON pattern:
 | Network timeout / connection refused | Yes | Wait **2 seconds**, retry **once** |
 | `5xx` server error | Yes | Wait **2 seconds**, retry **once** |
 | `401 Unauthorized` | Yes, but refresh first | Refresh the Keycloak token, then retry once |
-| `404 Not Found` | No — start fresh | Session gone — call `POST /sessions` instead |
-| `410 Gone` | No — start fresh | Session expired — call `POST /sessions` instead |
+| `404 Not Found` | No — start fresh | Session gone — call `POST /sessions/create` instead |
+| `410 Gone` | No — start fresh | Session expired — call `POST /sessions/create` instead |
 | `422 Unprocessable Entity` | No | Fix the request body (developer error) |
 | Other `4xx` | No | Show user an error message |
 
@@ -995,10 +995,10 @@ Sessions are stored in two places:
 
 ### Session resume flow
 
-On every app open, call `GET /ai-chatbot/v1/sessions/mine`:
+On every app open, call `GET /ai-chatbot/v1/sessions/list`:
 
 ```bash
-curl http://localhost:8000/ai-chatbot/v1/sessions/mine \
+curl http://localhost:8000/ai-chatbot/v1/sessions/list \
   -H "x-authenticated-user-token: 00000000-0000-0000-0000-000000000001"
 ```
 
@@ -1029,7 +1029,7 @@ Returns the last `activities[]` and `current_node` so the UI renders exactly whe
 | `mobile` | 30 minutes | `IGOT_WEB_SESSION_TTL_MINUTES` |
 | `whatsapp` | 1440 minutes (24 h) | hardcoded for Meta's 24h window |
 
-TTL resets on every user turn. After expiry, `GET /sessions/mine` returns `null` and `POST /sessions/{id}/turn` returns an expired message — both signal the client to start a new session.
+TTL resets on every user turn. After expiry, `GET /sessions/list` returns `null` and `POST /sessions/turn/{id}` returns an expired message — both signal the client to start a new session.
 
 ### Starting fresh
 
@@ -1044,14 +1044,14 @@ Save the new `session_id` to localStorage.
 
 ### Redis unavailable
 
-`GET /sessions/mine` returns `{ "session_id": null }` — client starts a new session. Nothing breaks.
+`GET /sessions/list` returns `{ "session_id": null }` — client starts a new session. Nothing breaks.
 
 ### Full conversation history
 
-Call `GET /ai-chatbot/v1/sessions/{id}/history` to get every message from the start of the session:
+Call `GET /ai-chatbot/v1/sessions/history/{id}` to get every message from the start of the session:
 
 ```bash
-curl http://localhost:8000/ai-chatbot/v1/sessions/{id}/history \
+curl http://localhost:8000/ai-chatbot/v1/sessions/history/{id} \
   -H "x-authenticated-user-token: <token>"
 ```
 
@@ -1086,7 +1086,7 @@ curl http://localhost:8000/ai-chatbot/v1/sessions/{id}/history \
 - The **last entry is always `role: "bot"`** — that's the current state still awaiting input; its activities[] contain the pending buttons/picker
 
 **When to call:**
-- On resume (`GET /sessions/mine` returned a session_id): call history first to render the thread, then the last bot entry's activities are already shown at the bottom
+- On resume (`GET /sessions/list` returned a session_id): call history first to render the thread, then the last bot entry's activities are already shown at the bottom
 - On initial load of a conversation view (if you want to show a scrollable thread)
 
 **Note:** History starts from the first topic selection. The initial greeting (welcome message + topic picker shown at session start) is not included — it is always identical and the frontend can prepend it locally if needed.
@@ -1287,7 +1287,7 @@ curl -s -X POST http://localhost:8000/ai-chatbot/v1/sessions \
 #### Step 2 — Select topic: ACCESS_REVOKED
 
 ```bash
-curl -s -X POST http://localhost:8000/ai-chatbot/v1/sessions/{session_id}/turn \
+curl -s -X POST http://localhost:8000/ai-chatbot/v1/sessions/turn/{session_id} \
   -H "Content-Type: application/json" \
   -H "x-authenticated-user-token: 00000000-0000-0000-0000-000000000001" \
   -d '{"action": "select_choice", "choice_id": "ACCESS_REVOKED"}'
@@ -1317,7 +1317,7 @@ curl -s -X POST http://localhost:8000/ai-chatbot/v1/sessions/{session_id}/turn \
 #### Step 3 — Select role
 
 ```bash
-curl -s -X POST http://localhost:8000/ai-chatbot/v1/sessions/{session_id}/turn \
+curl -s -X POST http://localhost:8000/ai-chatbot/v1/sessions/turn/{session_id} \
   -H "Content-Type: application/json" \
   -H "x-authenticated-user-token: 00000000-0000-0000-0000-000000000001" \
   -d '{"action": "select_choice", "choice_id": "learner"}'
@@ -1358,7 +1358,7 @@ curl -s -X POST http://localhost:8000/ai-chatbot/v1/sessions \
 #### Step 2 — Send a garbage choice_id
 
 ```bash
-curl -s -X POST http://localhost:8000/ai-chatbot/v1/sessions/{session_id}/turn \
+curl -s -X POST http://localhost:8000/ai-chatbot/v1/sessions/turn/{session_id} \
   -H "Content-Type: application/json" \
   -H "x-authenticated-user-token: 00000000-0000-0000-0000-000000000001" \
   -d '{"action": "select_choice", "choice_id": "BOGUS_FLOW_ID"}'
@@ -1403,7 +1403,7 @@ curl -s -X POST http://localhost:8000/ai-chatbot/v1/sessions \
 #### Step 2 — Select a topic
 
 ```bash
-curl -s -X POST http://localhost:8000/ai-chatbot/v1/sessions/{session_id}/turn \
+curl -s -X POST http://localhost:8000/ai-chatbot/v1/sessions/turn/{session_id} \
   -H "Content-Type: application/json" \
   -H "x-authenticated-user-token: 00000000-0000-0000-0000-000000000001" \
   -d '{"action": "select_choice", "choice_id": "CERTIFICATE_DOWNLOAD"}'
@@ -1446,7 +1446,7 @@ curl -s -X POST http://localhost:8000/ai-chatbot/v1/sessions \
 #### Step 2 — Select BULK_PROFILE_UPDATE (flow that asks for email)
 
 ```bash
-curl -s -X POST http://localhost:8000/ai-chatbot/v1/sessions/{session_id}/turn \
+curl -s -X POST http://localhost:8000/ai-chatbot/v1/sessions/turn/{session_id} \
   -H "Content-Type: application/json" \
   -H "x-authenticated-user-token: 00000000-0000-0000-0000-000000000001" \
   -d '{"action": "select_choice", "choice_id": "BULK_PROFILE_UPDATE"}'
@@ -1470,7 +1470,7 @@ curl -s -X POST http://localhost:8000/ai-chatbot/v1/sessions/{session_id}/turn \
 #### Step 3a — Send an invalid email
 
 ```bash
-curl -s -X POST http://localhost:8000/ai-chatbot/v1/sessions/{session_id}/turn \
+curl -s -X POST http://localhost:8000/ai-chatbot/v1/sessions/turn/{session_id} \
   -H "Content-Type: application/json" \
   -H "x-authenticated-user-token: 00000000-0000-0000-0000-000000000001" \
   -d '{"action": "send_message", "text": "not-a-valid-email"}'
@@ -1494,7 +1494,7 @@ The same `input` is re-shown. Try again with a valid email.
 #### Step 3b — Send a valid email
 
 ```bash
-curl -s -X POST http://localhost:8000/ai-chatbot/v1/sessions/{session_id}/turn \
+curl -s -X POST http://localhost:8000/ai-chatbot/v1/sessions/turn/{session_id} \
   -H "Content-Type: application/json" \
   -H "x-authenticated-user-token: 00000000-0000-0000-0000-000000000001" \
   -d '{"action": "send_message", "text": "admin@nic.gov.in"}'
@@ -1521,7 +1521,7 @@ curl -s -X POST http://localhost:8000/ai-chatbot/v1/sessions/{session_id}/turn \
 Pass `language` when starting a session. Supported values: `"en"`, `"hi"`, and other BCP-47 codes supported by the translation chain (Gemini → Google Translate → Bhashini).
 
 ```json
-POST /ai-chatbot/v1/sessions
+POST /ai-chatbot/v1/sessions/create
 { "channel": "web", "language": "hi" }
 ```
 
@@ -1558,9 +1558,9 @@ The JWT `iss` claim must match the configured `KEYCLOAK_HOST` — mismatches cau
 |--------|------|------|---------|
 | `GET` | `/health` | None | Liveness check |
 | `POST` | `/ai-chatbot/v1/sessions` | JWT | Start a new session |
-| `POST` | `/ai-chatbot/v1/sessions/{id}/turn` | JWT | Send user action, get bot activities |
-| `GET` | `/ai-chatbot/v1/sessions/mine` | JWT | Get caller's active session ID (Redis lookup) |
-| `GET` | `/ai-chatbot/v1/sessions/{id}/history` | JWT | Full conversation history + resume (last role:bot entry = current prompt) |
+| `POST` | `/ai-chatbot/v1/sessions/turn/{id}` | JWT | Send user action, get bot activities |
+| `GET` | `/ai-chatbot/v1/sessions/list` | JWT | Get caller's active session ID (Redis lookup) |
+| `GET` | `/ai-chatbot/v1/sessions/history/{id}` | JWT | Full conversation history + resume (last role:bot entry = current prompt) |
 | `GET` | `/ai-chatbot/v1/admin/sessions/{id}/trace` | JWT | Full conversation trace *(not yet wired)* |
 | `DELETE` | `/ai-chatbot/v1/admin/sessions/{id}` | JWT | DPDP data deletion *(not yet wired)* |
 | `GET` | `/docs` | None | OpenAPI / Swagger UI |

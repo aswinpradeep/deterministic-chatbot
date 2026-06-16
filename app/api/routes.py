@@ -17,9 +17,10 @@ WebSocket upgrade path (Phase 2):
 
 Endpoints (all under /ai-chatbot/v1):
     POST   /ai-chatbot/v1/sessions                      Start a new session
-    POST   /ai-chatbot/v1/sessions/{id}/turn            Submit a user action; returns activities
-    GET    /ai-chatbot/v1/sessions/mine                 Return caller's active session_id (Redis-backed)
-    GET    /ai-chatbot/v1/sessions/{id}/history         Full conversation history for a session
+    POST   /ai-chatbot/v1/sessions/create               Start a new session
+    POST   /ai-chatbot/v1/sessions/turn/{id}            Submit a user action; returns activities
+    GET    /ai-chatbot/v1/sessions/list                 Return caller's active session_id (Redis-backed)
+    GET    /ai-chatbot/v1/sessions/history/{id}         Full conversation history for a session
     GET    /ai-chatbot/v1/admin/sessions/{id}/trace     Admin-only: full conversation trace
     DELETE /ai-chatbot/v1/admin/sessions/{id}           DPDP DSR: hard-delete session
     GET    /health                                      Liveness check (root-level, not versioned)
@@ -101,7 +102,7 @@ async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-@router.post("/sessions", response_model=StartSessionResponse, tags=["chat"])
+@router.post("/sessions/create", response_model=StartSessionResponse, tags=["chat"])
 async def start_session(
     body: StartSessionRequest,
     request: Request,
@@ -174,7 +175,7 @@ async def start_session(
     )
 
 
-@router.post("/sessions/{session_id}/turn", response_model=TurnResponse, tags=["chat"])
+@router.post("/sessions/turn/{session_id}", response_model=TurnResponse, tags=["chat"])
 async def submit_turn(
     session_id: UUID,
     body: TurnRequest,
@@ -487,7 +488,7 @@ async def submit_turn(
     )
 
 
-@router.get("/sessions/mine", response_model=ActiveSessionResponse, tags=["chat"])
+@router.get("/sessions/list", response_model=ActiveSessionResponse, tags=["chat"])
 async def get_my_session(
     request: Request,
     claims: dict[str, Any] = Depends(require_jwt),
@@ -501,15 +502,15 @@ async def get_my_session(
 
     Client flow:
       1. Call this endpoint on app open.
-      2. If session_id is returned  → call GET /sessions/{id}/history to resume.
-      3. If null (or history empty) → call POST /sessions to start fresh.
+      2. If session_id is returned  → call GET /sessions/history/{id} to resume.
+      3. If null (or history empty) → call POST /sessions/create to start fresh.
     """
     user_id = claims["sub"]
     user_id_hash = hash_user_id(user_id)
 
     _store = getattr(request.app.state, "session_store", None)
     if _store is None:
-        log.debug("[sessions/mine] session_store unavailable — returning null")
+        log.debug("[sessions/list] session_store unavailable — returning null")
         return ActiveSessionResponse()
 
     session_id = await _store.get_active(user_id_hash)
@@ -526,7 +527,7 @@ async def get_my_session(
 
 
 
-@router.get("/sessions/{session_id}/history", response_model=HistoryResponse, tags=["chat"])
+@router.get("/sessions/history/{session_id}", response_model=HistoryResponse, tags=["chat"])
 async def get_session_history(
     session_id: UUID,
     request: Request,

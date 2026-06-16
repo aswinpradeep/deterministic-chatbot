@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
     "name": "iGOT Deterministic Chatbot API",
-    "description": "## Quick setup\n\n1. Set collection variables: `base_url` (default `http://localhost:8000`) and `auth_token`.\n2. **Local dev:** set `AUTH_DISABLED=true` in `.env` and use any UUID as `auth_token`.\n3. **Production / UAT:** set `AUTH_DISABLED=false` and paste a real Keycloak JWT as `auth_token`.\n\n## Typical flow\n```\nGET  /sessions/mine              → session found? go to history : start fresh\nGET  /sessions/{id}/history      → messages non-empty? resume : start fresh\nPOST /sessions                   → start fresh (get session_id, auto-saved)\nPOST /sessions/{id}/turn         → repeat until response has type:end\n```\n\n## Activity type → next action mapping\n\nEvery `/turn` response has `activities[]`. Each entry has a `type` field:\n\n| Response activity type | What to render | Next action to send |\n|---|---|---|\n| `markdown` | Chat bubble with Markdown | Nothing — render and wait for the next activity |\n| `quick_replies` | Row of tappable buttons | `select_choice` with `choice_id` from `choices[].id` |\n| `picker` | Searchable scrollable list | `pick_item` with `picker_id`, `item_id`, `item_label` from the picker |\n| `input` | Free-text input box | `send_message` with `text` = what the user typed |\n| `end` | End-of-conversation banner | Nothing — session is over |\n| `text` | Plain text bubble (no Markdown) | Only sent on **session expiry** — call `POST /sessions` to restart |\n| `typing` | Loading animation | Not emitted by any current flow — reserved for future streaming |\n\n**Multiple activities in one response:** render all of them top-to-bottom, then send ONE action in reply to the last interactive one (quick_replies / picker / input). markdown and typing activities don't need a reply on their own.",
+    "description": "## Quick setup\n\n1. Set collection variables: `base_url` (default `http://localhost:8000`) and `auth_token`.\n2. **Local dev:** set `AUTH_DISABLED=true` in `.env` and use any UUID as `auth_token`.\n3. **Production / UAT:** set `AUTH_DISABLED=false` and paste a real Keycloak JWT as `auth_token`.\n\n## Typical flow\n```\nGET  /sessions/list              → session found? go to history : start fresh\nGET  /sessions/history/{id}      → messages non-empty? resume : start fresh\nPOST /sessions/create                   → start fresh (get session_id, auto-saved)\nPOST /sessions/create/turn/{id}         → repeat until response has type:end\n```\n\n## Activity type → next action mapping\n\nEvery `/turn` response has `activities[]`. Each entry has a `type` field:\n\n| Response activity type | What to render | Next action to send |\n|---|---|---|\n| `markdown` | Chat bubble with Markdown | Nothing — render and wait for the next activity |\n| `quick_replies` | Row of tappable buttons | `select_choice` with `choice_id` from `choices[].id` |\n| `picker` | Searchable scrollable list | `pick_item` with `picker_id`, `item_id`, `item_label` from the picker |\n| `input` | Free-text input box | `send_message` with `text` = what the user typed |\n| `end` | End-of-conversation banner | Nothing — session is over |\n| `text` | Plain text bubble (no Markdown) | Only sent on **session expiry** — call `POST /sessions/create` to restart |\n| `typing` | Loading animation | Not emitted by any current flow — reserved for future streaming |\n\n**Multiple activities in one response:** render all of them top-to-bottom, then send ONE action in reply to the last interactive one (quick_replies / picker / input). markdown and typing activities don't need a reply on their own.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -45,7 +45,7 @@
           "response": []
         },
         {
-          "name": "Check active session (GET /sessions/mine)",
+          "name": "Check active session (GET /sessions/list)",
           "event": [
             {
               "listen": "test",
@@ -58,7 +58,7 @@
                   "    pm.collectionVariables.set('session_id', r.session_id);",
                   "    console.log('Active session found → session_id saved:', r.session_id);",
                   "} else {",
-                  "    console.log('No active session → run POST /sessions next');",
+                  "    console.log('No active session → run POST /sessions/create/create next');",
                   "}",
                   "pm.test('Status 200', () => pm.response.to.have.status(200));"
                 ]
@@ -75,16 +75,16 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/ai-chatbot/v1/sessions/mine",
+              "raw": "{{base_url}}/ai-chatbot/v1/sessions/list",
               "host": ["{{base_url}}"],
-              "path": ["ai-chatbot", "v1", "sessions", "mine"]
+              "path": ["ai-chatbot", "v1", "sessions", "list"]
             },
-            "description": "Call this first on every app open.\n\n**Response — session found:**\n```json\n{ \"session_id\": \"<uuid>\", \"status\": \"in_flow\", \"flow_id\": \"AUTO_LOGOUT_CRASH\" }\n```\n→ Call GET /sessions/{id}/history next.\n- messages[] non-empty → render thread, last role:bot entry = current prompt\n- messages[] empty → call POST /sessions instead (user hadn't picked a topic yet)\n\n**Response — no active session:**\n```json\n{ \"session_id\": null }\n```\n→ Call POST /sessions to start fresh.\n\nAlways returns 200 — never errors. Returns null when Redis is unavailable (safe fallback)."
+            "description": "Call this first on every app open.\n\n**Response — session found:**\n```json\n{ \"session_id\": \"<uuid>\", \"status\": \"in_flow\", \"flow_id\": \"AUTO_LOGOUT_CRASH\" }\n```\n→ Call GET /sessions/history/{id} next.\n- messages[] non-empty → render thread, last role:bot entry = current prompt\n- messages[] empty → call POST /sessions/create/create instead (user hadn't picked a topic yet)\n\n**Response — no active session:**\n```json\n{ \"session_id\": null }\n```\n→ Call POST /sessions/create to start fresh.\n\nAlways returns 200 — never errors. Returns null when Redis is unavailable (safe fallback)."
           },
           "response": []
         },
         {
-          "name": "Start new session (POST /sessions)",
+          "name": "Start new session (POST /sessions/create)",
           "event": [
             {
               "listen": "test",
@@ -123,32 +123,32 @@
               "options": { "raw": { "language": "json" } }
             },
             "url": {
-              "raw": "{{base_url}}/ai-chatbot/v1/sessions",
+              "raw": "{{base_url}}/ai-chatbot/v1/sessions/create",
               "host": ["{{base_url}}"],
-              "path": ["ai-chatbot", "v1", "sessions"]
+              "path": ["ai-chatbot", "v1", "sessions", "create"]
             },
-            "description": "Creates a new chat session. Call this when GET /sessions/mine returns null.\n\n`channel`: `web` | `mobile` | `whatsapp` | `voice`\n`language`: `en` | `hi` | any BCP-47 code\n\n**Response contains:**\n- `session_id` — save this, used in every subsequent request (auto-saved by test script)\n- `activities[]` — greeting message + topic picker (14 topics as quick_reply buttons)\n- `status: \"awaiting_user\"`\n\nNext: call POST /sessions/{session_id}/turn with the topic the user picks."
+            "description": "Creates a new chat session. Call this when GET /sessions/list returns null.\n\n`channel`: `web` | `mobile` | `whatsapp` | `voice`\n`language`: `en` | `hi` | any BCP-47 code\n\n**Response contains:**\n- `session_id` — save this, used in every subsequent request (auto-saved by test script)\n- `activities[]` — greeting message + topic picker (14 topics as quick_reply buttons)\n- `status: \"awaiting_user\"`\n\nNext: call POST /sessions/create/turn/{session_id} with the topic the user picks."
           },
           "response": []
         },
         {
-          "name": "Get conversation history (GET /sessions/{id}/history)",
+          "name": "Get conversation history (GET /sessions/history/{id})",
           "request": {
             "method": "GET",
             "header": [
               { "key": "x-authenticated-user-token", "value": "{{auth_token}}", "type": "text" }
             ],
             "url": {
-              "raw": "{{base_url}}/ai-chatbot/v1/sessions/{{session_id}}/history",
+              "raw": "{{base_url}}/ai-chatbot/v1/sessions/history/{{session_id}}",
               "host": ["{{base_url}}"],
-              "path": ["ai-chatbot", "v1", "sessions", "{{session_id}}", "history"]
+              "path": ["ai-chatbot", "v1", "sessions", "history", "{{session_id}}"]
             },
-            "description": "WHY: Returns every user action and bot response from the start of the session — so the UI can render a full scrollable chat thread, not just the last bot message.\n\n{{session_id}} — from POST /sessions response (auto-saved).\n\nResponse: messages[] array in chronological order.\n- role 'bot': render activities[] using the same code as a /turn response\n- role 'user': render text as user bubble\n- Last entry is always role 'bot' — the current state awaiting input\n\nReturns messages: [] for new sessions before any topic is selected, or sessions started before history tracking was added."
+            "description": "WHY: Returns every user action and bot response from the start of the session — so the UI can render a full scrollable chat thread, not just the last bot message.\n\n{{session_id}} — from POST /sessions/create/create response (auto-saved).\n\nResponse: messages[] array in chronological order.\n- role 'bot': render activities[] using the same code as a /turn response\n- role 'user': render text as user bubble\n- Last entry is always role 'bot' — the current state awaiting input\n\nReturns messages: [] for new sessions before any topic is selected, or sessions started before history tracking was added."
           },
           "response": []
         },
         {
-          "name": "Send turn (POST /sessions/{id}/turn)",
+          "name": "Send turn (POST /sessions/create/turn/{id})",
           "request": {
             "method": "POST",
             "header": [
@@ -169,11 +169,11 @@
               "options": { "raw": { "language": "json" } }
             },
             "url": {
-              "raw": "{{base_url}}/ai-chatbot/v1/sessions/{{session_id}}/turn",
+              "raw": "{{base_url}}/ai-chatbot/v1/sessions/turn/{{session_id}}",
               "host": ["{{base_url}}"],
-              "path": ["ai-chatbot", "v1", "sessions", "{{session_id}}", "turn"]
+              "path": ["ai-chatbot", "v1", "sessions", "turn", "{{session_id}}"]
             },
-            "description": "Sends a user action and receives the bot's next activities.\n\n`{{session_id}}` — from POST /sessions response (auto-saved).\n\n**Action types and when to use each:**\n\n`select_choice` — user taps a quick-reply button:\n```json\n{ \"action\": \"select_choice\", \"choice_id\": \"<id from choices[]>\", \"user_says\": \"<button label>\" }\n```\n\n`send_message` — user types free text (only when disable_input is false):\n```json\n{ \"action\": \"send_message\", \"text\": \"user typed this\" }\n```\n\n`pick_item` — user selects from a dynamic list (course picker, etc.):\n```json\n{ \"action\": \"pick_item\", \"picker_id\": \"<from picker activity>\", \"item_id\": \"<id>\", \"item_label\": \"<label>\" }\n```\n\n**choice_id and picker_id always come from the previous response's activities[]** — never hardcode them.\n\nRepeat until `activities[]` contains `{ \"type\": \"end\" }` — that means the conversation is complete."
+            "description": "Sends a user action and receives the bot's next activities.\n\n`{{session_id}}` — from POST /sessions/create/create response (auto-saved).\n\n**Action types and when to use each:**\n\n`select_choice` — user taps a quick-reply button:\n```json\n{ \"action\": \"select_choice\", \"choice_id\": \"<id from choices[]>\", \"user_says\": \"<button label>\" }\n```\n\n`send_message` — user types free text (only when disable_input is false):\n```json\n{ \"action\": \"send_message\", \"text\": \"user typed this\" }\n```\n\n`pick_item` — user selects from a dynamic list (course picker, etc.):\n```json\n{ \"action\": \"pick_item\", \"picker_id\": \"<from picker activity>\", \"item_id\": \"<id>\", \"item_label\": \"<label>\" }\n```\n\n**choice_id and picker_id always come from the previous response's activities[]** — never hardcode them.\n\nRepeat until `activities[]` contains `{ \"type\": \"end\" }` — that means the conversation is complete."
           },
           "response": []
         },
@@ -193,7 +193,7 @@
               "host": ["{{base_url}}"],
               "path": ["ai-chatbot", "v1", "admin", "sessions", "{{session_id}}", "trace"]
             },
-            "description": "Returns the full conversation trace (every node visited, branch decisions, API calls). Not yet implemented — returns HTTP 501.\n\n`{{session_id}}` — from POST /sessions response."
+            "description": "Returns the full conversation trace (every node visited, branch decisions, API calls). Not yet implemented — returns HTTP 501.\n\n`{{session_id}}` — from POST /sessions/create/create response."
           },
           "response": []
         },
@@ -213,7 +213,7 @@
               "host": ["{{base_url}}"],
               "path": ["ai-chatbot", "v1", "admin", "sessions", "{{session_id}}"]
             },
-            "description": "Deletes all personal data for a session (DPDP / right-to-erasure). Not yet implemented — returns HTTP 501.\n\n`{{session_id}}` — from POST /sessions response."
+            "description": "Deletes all personal data for a session (DPDP / right-to-erasure). Not yet implemented — returns HTTP 501.\n\n`{{session_id}}` — from POST /sessions/create/create response."
           },
           "response": []
         }
@@ -254,9 +254,9 @@
               "options": { "raw": { "language": "json" } }
             },
             "url": {
-              "raw": "{{base_url}}/ai-chatbot/v1/sessions",
+              "raw": "{{base_url}}/ai-chatbot/v1/sessions/create",
               "host": ["{{base_url}}"],
-              "path": ["ai-chatbot", "v1", "sessions"]
+              "path": ["ai-chatbot", "v1", "sessions", "create"]
             },
             "description": "Creates a new session.\n\nResponse: greeting + 14 topic buttons. session_id is auto-saved to {{session_id}} by the test script."
           },
@@ -276,9 +276,9 @@
               "options": { "raw": { "language": "json" } }
             },
             "url": {
-              "raw": "{{base_url}}/ai-chatbot/v1/sessions/{{session_id}}/turn",
+              "raw": "{{base_url}}/ai-chatbot/v1/sessions/turn/{{session_id}}",
               "host": ["{{base_url}}"],
-              "path": ["ai-chatbot", "v1", "sessions", "{{session_id}}", "turn"]
+              "path": ["ai-chatbot", "v1", "sessions", "turn", "{{session_id}}"]
             },
             "description": "{{session_id}} — auto-filled from Step 1.\nchoice_id — taken from Step 1 response, activities[1].choices[].id\n\nResponse: bot asks 'Android or iPhone?' with choice_id 'android' and 'ios'."
           },
@@ -298,9 +298,9 @@
               "options": { "raw": { "language": "json" } }
             },
             "url": {
-              "raw": "{{base_url}}/ai-chatbot/v1/sessions/{{session_id}}/turn",
+              "raw": "{{base_url}}/ai-chatbot/v1/sessions/turn/{{session_id}}",
               "host": ["{{base_url}}"],
-              "path": ["ai-chatbot", "v1", "sessions", "{{session_id}}", "turn"]
+              "path": ["ai-chatbot", "v1", "sessions", "turn", "{{session_id}}"]
             },
             "description": "{{session_id}} — auto-filled from Step 1.\nchoice_id — taken from Step 2 response, activities[].choices[].id\n\nAlternative: send 'ios' for iPhone-specific steps.\n\nResponse: numbered clear-cache steps + 'Has the issue been resolved?' with choices 'yes' and 'no'."
           },
@@ -320,11 +320,11 @@
               "options": { "raw": { "language": "json" } }
             },
             "url": {
-              "raw": "{{base_url}}/ai-chatbot/v1/sessions/{{session_id}}/turn",
+              "raw": "{{base_url}}/ai-chatbot/v1/sessions/turn/{{session_id}}",
               "host": ["{{base_url}}"],
-              "path": ["ai-chatbot", "v1", "sessions", "{{session_id}}", "turn"]
+              "path": ["ai-chatbot", "v1", "sessions", "turn", "{{session_id}}"]
             },
-            "description": "{{session_id}} — auto-filled from Step 1.\nchoice_id — taken from Step 3 response, activities[].choices[].id\n\nAlternative: send 'no' to escalate to a support ticket.\n\nExpected response:\n- activities[0]: markdown 'Glad I could help 🙏'\n- activities[1]: { \"type\": \"end\", \"outcome\": \"self_served\" }\n- status: 'satisfied'\n\nAfter this: GET /sessions/mine returns null — session is cleared from Redis."
+            "description": "{{session_id}} — auto-filled from Step 1.\nchoice_id — taken from Step 3 response, activities[].choices[].id\n\nAlternative: send 'no' to escalate to a support ticket.\n\nExpected response:\n- activities[0]: markdown 'Glad I could help 🙏'\n- activities[1]: { \"type\": \"end\", \"outcome\": \"self_served\" }\n- status: 'satisfied'\n\nAfter this: GET /sessions/list returns null — session is cleared from Redis."
           },
           "response": []
         },
@@ -336,9 +336,9 @@
               { "key": "x-authenticated-user-token", "value": "{{auth_token}}", "type": "text" }
             ],
             "url": {
-              "raw": "{{base_url}}/ai-chatbot/v1/sessions/{{session_id}}/history",
+              "raw": "{{base_url}}/ai-chatbot/v1/sessions/history/{{session_id}}",
               "host": ["{{base_url}}"],
-              "path": ["ai-chatbot", "v1", "sessions", "{{session_id}}", "history"]
+              "path": ["ai-chatbot", "v1", "sessions", "history", "{{session_id}}"]
             },
             "description": "{{session_id}} from Step 1.\n\nRun this after Step 4 to see the full conversation thread that was just completed.\n\nExpected: messages[] with 3 bot entries (device question, clear-cache steps, resolved) and 3 user entries (topic selection, Android, yes).\n\nNote: initial greeting (welcome + topic picker) is not included — history starts from first topic selection."
           },
@@ -365,9 +365,9 @@
               { "key": "x-authenticated-user-token", "value": "{{auth_token}}", "type": "text" }
             ],
             "url": {
-              "raw": "{{base_url}}/ai-chatbot/v1/sessions/mine",
+              "raw": "{{base_url}}/ai-chatbot/v1/sessions/list",
               "host": ["{{base_url}}"],
-              "path": ["ai-chatbot", "v1", "sessions", "mine"]
+              "path": ["ai-chatbot", "v1", "sessions", "list"]
             },
             "description": "Optional verification step after the flow ends.\n\nExpected: { \"session_id\": null } — confirms Redis cleaned up the session on the 'end' node.\n\nIf Redis is not running locally, this will also return null (Redis unavailable fallback)."
           },
@@ -407,9 +407,9 @@
               "options": { "raw": { "language": "json" } }
             },
             "url": {
-              "raw": "{{base_url}}/ai-chatbot/v1/sessions",
+              "raw": "{{base_url}}/ai-chatbot/v1/sessions/create",
               "host": ["{{base_url}}"],
-              "path": ["ai-chatbot", "v1", "sessions"]
+              "path": ["ai-chatbot", "v1", "sessions", "create"]
             },
             "description": "Creates a new session. session_id auto-saved by test script.\n\nResponse: greeting + 14 topic quick_reply buttons."
           },
@@ -429,9 +429,9 @@
               "options": { "raw": { "language": "json" } }
             },
             "url": {
-              "raw": "{{base_url}}/ai-chatbot/v1/sessions/{{session_id}}/turn",
+              "raw": "{{base_url}}/ai-chatbot/v1/sessions/turn/{{session_id}}",
               "host": ["{{base_url}}"],
-              "path": ["ai-chatbot", "v1", "sessions", "{{session_id}}", "turn"]
+              "path": ["ai-chatbot", "v1", "sessions", "turn", "{{session_id}}"]
             },
             "description": "{{session_id}} auto-filled from Step 1.\n\nResponse: 'What's the issue with your certificate?' with two choices:\n- C1: Certificate not generated / not received\n- C3: Incorrect name on certificate"
           },
@@ -451,9 +451,9 @@
               "options": { "raw": { "language": "json" } }
             },
             "url": {
-              "raw": "{{base_url}}/ai-chatbot/v1/sessions/{{session_id}}/turn",
+              "raw": "{{base_url}}/ai-chatbot/v1/sessions/turn/{{session_id}}",
               "host": ["{{base_url}}"],
-              "path": ["ai-chatbot", "v1", "sessions", "{{session_id}}", "turn"]
+              "path": ["ai-chatbot", "v1", "sessions", "turn", "{{session_id}}"]
             },
             "description": "Response: course picker asking which course has the certificate issue.\n\nactivities[1] will be type 'picker' with:\n- picker_id: 'collected.c1_course_id'  ← use this in Step 4\n- items[]: list of user's enrolled courses (requires real JWT)\n\nEach item in items[]: { id, label } — pick one for Step 4."
           },
@@ -473,9 +473,9 @@
               "options": { "raw": { "language": "json" } }
             },
             "url": {
-              "raw": "{{base_url}}/ai-chatbot/v1/sessions/{{session_id}}/turn",
+              "raw": "{{base_url}}/ai-chatbot/v1/sessions/turn/{{session_id}}",
               "host": ["{{base_url}}"],
-              "path": ["ai-chatbot", "v1", "sessions", "{{session_id}}", "turn"]
+              "path": ["ai-chatbot", "v1", "sessions", "turn", "{{session_id}}"]
             },
             "description": "picker_id: always 'collected.c1_course_id' for this flow.\nitem_id + item_label: copy from Step 3 response → activities[1].items[n].id and .label\n\nThe server checks enrollment status and branches:\n- Course completed + 24h elapsed → shows download steps → go to Step 5\n- Course completed + < 24h → 'Wait 24 hours' → END\n- Course in-progress → shows pending resources → go to Step 5\n- Course not started → shows completion steps → go to Step 5\n- Course not found → re-shows picker (repeat Step 4 with correct item)"
           },
@@ -495,9 +495,9 @@
               "options": { "raw": { "language": "json" } }
             },
             "url": {
-              "raw": "{{base_url}}/ai-chatbot/v1/sessions/{{session_id}}/turn",
+              "raw": "{{base_url}}/ai-chatbot/v1/sessions/turn/{{session_id}}",
               "host": ["{{base_url}}"],
-              "path": ["ai-chatbot", "v1", "sessions", "{{session_id}}", "turn"]
+              "path": ["ai-chatbot", "v1", "sessions", "turn", "{{session_id}}"]
             },
             "description": "choice_id from Step 4 response → last activity's choices[].id (yes / no)\n\nSend 'yes' → status: satisfied, type: end, outcome: self_served\nSend 'no' → LLM auto-raises a Zoho support ticket → confirm_ticket activity → END"
           },
@@ -536,9 +536,9 @@
               "options": { "raw": { "language": "json" } }
             },
             "url": {
-              "raw": "{{base_url}}/ai-chatbot/v1/sessions",
+              "raw": "{{base_url}}/ai-chatbot/v1/sessions/create",
               "host": ["{{base_url}}"],
-              "path": ["ai-chatbot", "v1", "sessions"]
+              "path": ["ai-chatbot", "v1", "sessions", "create"]
             },
             "description": "Creates a new session. session_id auto-saved by test script."
           },
@@ -558,9 +558,9 @@
               "options": { "raw": { "language": "json" } }
             },
             "url": {
-              "raw": "{{base_url}}/ai-chatbot/v1/sessions/{{session_id}}/turn",
+              "raw": "{{base_url}}/ai-chatbot/v1/sessions/turn/{{session_id}}",
               "host": ["{{base_url}}"],
-              "path": ["ai-chatbot", "v1", "sessions", "{{session_id}}", "turn"]
+              "path": ["ai-chatbot", "v1", "sessions", "turn", "{{session_id}}"]
             },
             "description": "Response: 'What's the issue?' with C1 and C3 buttons."
           },
@@ -580,9 +580,9 @@
               "options": { "raw": { "language": "json" } }
             },
             "url": {
-              "raw": "{{base_url}}/ai-chatbot/v1/sessions/{{session_id}}/turn",
+              "raw": "{{base_url}}/ai-chatbot/v1/sessions/turn/{{session_id}}",
               "host": ["{{base_url}}"],
-              "path": ["ai-chatbot", "v1", "sessions", "{{session_id}}", "turn"]
+              "path": ["ai-chatbot", "v1", "sessions", "turn", "{{session_id}}"]
             },
             "description": "Response: course picker asking which course has the wrong name.\n\nactivities[1]: type 'picker' with:\n- picker_id: 'collected.c3_course_id'  ← use in Step 4\n- items[]: user's completed enrolled courses"
           },
@@ -602,9 +602,9 @@
               "options": { "raw": { "language": "json" } }
             },
             "url": {
-              "raw": "{{base_url}}/ai-chatbot/v1/sessions/{{session_id}}/turn",
+              "raw": "{{base_url}}/ai-chatbot/v1/sessions/turn/{{session_id}}",
               "host": ["{{base_url}}"],
-              "path": ["ai-chatbot", "v1", "sessions", "{{session_id}}", "turn"]
+              "path": ["ai-chatbot", "v1", "sessions", "turn", "{{session_id}}"]
             },
             "description": "picker_id: always 'collected.c3_course_id' for this flow.\nitem_id + item_label: copy from Step 3 → activities[1].items[n]\n\nThe server fetches the user's current profile name from Karmayogi and returns:\n'Your certificate for <course> was generated with the name: <First> <Last>. Would you like to update this name?'\n- choices: yes / no\n\nSend 'yes' → continue to Step 5 (name correction)\nSend 'no' → END ('No problem, name stays unchanged')"
           },
@@ -624,9 +624,9 @@
               "options": { "raw": { "language": "json" } }
             },
             "url": {
-              "raw": "{{base_url}}/ai-chatbot/v1/sessions/{{session_id}}/turn",
+              "raw": "{{base_url}}/ai-chatbot/v1/sessions/turn/{{session_id}}",
               "host": ["{{base_url}}"],
-              "path": ["ai-chatbot", "v1", "sessions", "{{session_id}}", "turn"]
+              "path": ["ai-chatbot", "v1", "sessions", "turn", "{{session_id}}"]
             },
             "description": "Response contains TWO activities — this is the input type pattern:\n```json\n[\n  { \"type\": \"markdown\", \"content\": \"Please enter your correct **First Name** (as per government ID):\" },\n  { \"type\": \"input\", \"input_id\": \"collected.c3_new_first_name\", \"input_placeholder\": \"\" }\n]\n```\n\nRendering rule for `type: input`:\n1. Render the preceding `markdown` activity as a chat bubble (the question)\n2. Render the `input` activity as a free-text input box\n3. When the user submits → send `send_message` with `text: <what they typed>` (Step 6)\n\n`input_id` tells you which field is being collected — useful if you want to apply client-side validation (e.g. email pattern check before sending)."
           },
@@ -646,9 +646,9 @@
               "options": { "raw": { "language": "json" } }
             },
             "url": {
-              "raw": "{{base_url}}/ai-chatbot/v1/sessions/{{session_id}}/turn",
+              "raw": "{{base_url}}/ai-chatbot/v1/sessions/turn/{{session_id}}",
               "host": ["{{base_url}}"],
-              "path": ["ai-chatbot", "v1", "sessions", "{{session_id}}", "turn"]
+              "path": ["ai-chatbot", "v1", "sessions", "turn", "{{session_id}}"]
             },
             "description": "Responding to the `type: input` activity from Step 5.\n\n`action: send_message` is the correct action whenever the previous response contained `type: input`. The `text` field is whatever the user typed in the input box.\n\nResponse: another markdown + input pair asking for the Last Name (same pattern as Step 5 — repeat with Step 7)."
           },
@@ -668,9 +668,9 @@
               "options": { "raw": { "language": "json" } }
             },
             "url": {
-              "raw": "{{base_url}}/ai-chatbot/v1/sessions/{{session_id}}/turn",
+              "raw": "{{base_url}}/ai-chatbot/v1/sessions/turn/{{session_id}}",
               "host": ["{{base_url}}"],
-              "path": ["ai-chatbot", "v1", "sessions", "{{session_id}}", "turn"]
+              "path": ["ai-chatbot", "v1", "sessions", "turn", "{{session_id}}"]
             },
             "description": "Responding to the `type: input` activity from Step 6.\n\nSame pattern as Step 6 — `action: send_message`, `text` is the user's last name.\n\nResponse: name confirmation with `quick_replies`:\n'Change certificate name from: <old> to: Ramesh Kumar. Shall we proceed?'\n- choices: yes (confirm) / no (re-enter name)\n\nSend 'yes' → Step 8 (API update)\nSend 'no' → bot re-asks for first name (repeat from Step 6)"
           },
@@ -690,9 +690,9 @@
               "options": { "raw": { "language": "json" } }
             },
             "url": {
-              "raw": "{{base_url}}/ai-chatbot/v1/sessions/{{session_id}}/turn",
+              "raw": "{{base_url}}/ai-chatbot/v1/sessions/turn/{{session_id}}",
               "host": ["{{base_url}}"],
-              "path": ["ai-chatbot", "v1", "sessions", "{{session_id}}", "turn"]
+              "path": ["ai-chatbot", "v1", "sessions", "turn", "{{session_id}}"]
             },
             "description": "Triggers PATCH /api/user/private/v1/update on Karmayogi with the new name.\n\nOn success: '✅ Your name has been updated to Ramesh Kumar. To re-download certificate: go to Profile → My Learning → Completed → find course → Download Certificate'\nThen asks: 'Was the name correction successful?' → yes/no\n\nOn API failure: bot raises a Zoho support ticket automatically."
           },
@@ -712,9 +712,9 @@
               "options": { "raw": { "language": "json" } }
             },
             "url": {
-              "raw": "{{base_url}}/ai-chatbot/v1/sessions/{{session_id}}/turn",
+              "raw": "{{base_url}}/ai-chatbot/v1/sessions/turn/{{session_id}}",
               "host": ["{{base_url}}"],
-              "path": ["ai-chatbot", "v1", "sessions", "{{session_id}}", "turn"]
+              "path": ["ai-chatbot", "v1", "sessions", "turn", "{{session_id}}"]
             },
             "description": "choice_id from Step 8 response → activities[last].choices[].id\n\nSend 'yes' → status: satisfied, type: end, outcome: self_served\nSend 'no' → LLM auto-raises Zoho ticket with course name, old name, new name → confirm_ticket → END"
           },
@@ -753,9 +753,9 @@
               "options": { "raw": { "language": "json" } }
             },
             "url": {
-              "raw": "{{base_url}}/ai-chatbot/v1/sessions",
+              "raw": "{{base_url}}/ai-chatbot/v1/sessions/create",
               "host": ["{{base_url}}"],
-              "path": ["ai-chatbot", "v1", "sessions"]
+              "path": ["ai-chatbot", "v1", "sessions", "create"]
             },
             "description": "session_id auto-saved by test script."
           },
@@ -775,9 +775,9 @@
               "options": { "raw": { "language": "json" } }
             },
             "url": {
-              "raw": "{{base_url}}/ai-chatbot/v1/sessions/{{session_id}}/turn",
+              "raw": "{{base_url}}/ai-chatbot/v1/sessions/turn/{{session_id}}",
               "host": ["{{base_url}}"],
-              "path": ["ai-chatbot", "v1", "sessions", "{{session_id}}", "turn"]
+              "path": ["ai-chatbot", "v1", "sessions", "turn", "{{session_id}}"]
             },
             "description": "Response: 'Android or iPhone?' with choice_id 'android' and 'ios'."
           },
@@ -797,9 +797,9 @@
               "options": { "raw": { "language": "json" } }
             },
             "url": {
-              "raw": "{{base_url}}/ai-chatbot/v1/sessions/{{session_id}}/turn",
+              "raw": "{{base_url}}/ai-chatbot/v1/sessions/turn/{{session_id}}",
               "host": ["{{base_url}}"],
-              "path": ["ai-chatbot", "v1", "sessions", "{{session_id}}", "turn"]
+              "path": ["ai-chatbot", "v1", "sessions", "turn", "{{session_id}}"]
             },
             "description": "Response: clear-cache steps + 'Has the issue been resolved?' with choice_id 'yes' and 'no'."
           },
@@ -839,9 +839,9 @@
               "options": { "raw": { "language": "json" } }
             },
             "url": {
-              "raw": "{{base_url}}/ai-chatbot/v1/sessions/{{session_id}}/turn",
+              "raw": "{{base_url}}/ai-chatbot/v1/sessions/turn/{{session_id}}",
               "host": ["{{base_url}}"],
-              "path": ["ai-chatbot", "v1", "sessions", "{{session_id}}", "turn"]
+              "path": ["ai-chatbot", "v1", "sessions", "turn", "{{session_id}}"]
             },
             "description": "Choosing 'no' triggers the LLM ticket path:\n1. LLM generates ticket subject + description from conversation context\n2. Zoho ticket created via API\n3. Bot confirms: '✅ Ticket #T12345 raised. L2 team will reach you within 2 business days.'\n4. Session ends with type: 'end', outcome: 'ticket_raised'\n\nExpected response shape:\n```json\n{\n  \"session_id\": \"...\",\n  \"ticket_id\": \"T12345\",       ← Zoho ticket number — show this in the UI\n  \"activities\": [\n    { \"type\": \"markdown\", \"content\": \"✅ Ticket #T12345 raised...\" },\n    { \"type\": \"end\", \"outcome\": \"ticket_raised\" }\n  ],\n  \"status\": \"ticket_raised\"\n}\n```\n\nUI must handle two terminal outcomes differently:\n- outcome: 'self_served' → show 'Issue resolved' banner\n- outcome: 'ticket_raised' → show 'Ticket #<ticket_id> raised' banner with 2-day SLA note\n\nIf Zoho API fails: outcome becomes 'ticket_failed' with a message to email support directly."
           },
