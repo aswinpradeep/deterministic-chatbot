@@ -268,6 +268,10 @@ def record_session_end(
         from langfuse import propagate_attributes
         from langfuse.types import TraceContext
 
+        # Normalise outcome to a plain str — result.get("status") may return a
+        # FlowStatus str-enum, which OTel rejects in tag lists.
+        outcome = outcome if type(outcome) is str else getattr(outcome, "value", str(outcome))
+
         _path_str = " → ".join(node_path) if node_path else ""
         _tags = [channel, language, flow_id or "no_flow", outcome]
         if ticket_id:
