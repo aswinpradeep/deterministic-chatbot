@@ -216,22 +216,36 @@ def turn_trace(
         yield   # Langfuse setup failed — run user code without tracing
 
 
-def set_trace_io(
+def set_span_io(
     *,
-    input: dict[str, Any] | None = None,
-    output: dict[str, Any] | None = None,
+    input: Any | None = None,
+    output: Any | None = None,
 ) -> None:
-    """Set the current span's input/output shown in the Langfuse timeline.
+    """Set the current observation's input/output shown in the Langfuse timeline.
 
-    Call inside a turn_trace block — before and after the graph invocation to
-    record what went in and what came out.  No-op when tracing is disabled.
+    Uses update_current_span (sets langfuse.observation.input / .output) — the
+    non-deprecated approach that Langfuse's UI actually renders.
+
+    Call inside a turn_trace block.  Calling twice is fine — the second call
+    overwrites the first, so call once before the graph with just input, then
+    again after with both input and output.  No-op when tracing is disabled.
     """
     if not _enabled or _client is None:
         return
     try:
-        _client.set_current_trace_io(input=input, output=output)
+        kwargs: dict[str, Any] = {}
+        if input is not None:
+            kwargs["input"] = input
+        if output is not None:
+            kwargs["output"] = output
+        if kwargs:
+            _client.update_current_span(**kwargs)
     except Exception as exc:  # noqa: BLE001
-        log.debug("[tracing] set_trace_io failed: %s", exc)
+        log.debug("[tracing] set_span_io failed: %s", exc)
+
+
+# Keep old name as alias so any external callers don't break
+set_trace_io = set_span_io
 
 
 # ── Session end summary ────────────────────────────────────────────────────────

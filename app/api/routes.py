@@ -171,9 +171,14 @@ async def start_session(
         translation_svc = getattr(request.app.state, "services", {}).get("translation")
         activities = await _translate_activities(activities, body.language, translation_svc)
 
-        tracing.set_trace_io(
-            input={"channel": body.channel, "language": body.language},
-            output={"menu_items": len(_menu_quick_replies(request))},
+        # What the user effectively "sent": a new session open
+        _menu = _menu_quick_replies(request)
+        tracing.set_span_io(
+            input={"event": "session_opened", "channel": body.channel, "language": body.language},
+            output={
+                "bot": "👋 Greeting shown + topic menu",
+                "menu_options": [qr.label for qr in _menu],
+            },
         )
 
     # Persist LF trace chain IDs so subsequent turns link into the same trace
@@ -300,12 +305,18 @@ async def submit_turn(
                 turn_count=session["turn_count"],
             ):
                 _lf_tid_phase1, _lf_oid_phase1 = tracing.get_current_span_ids()
-                tracing.set_trace_io(input={"flow_id": flow_id, "action": "topic_selected", "user_choice": flow_id})
+                # topic label comes from the menu — same as flow_id for built-in flows
+                _topic_label = next(
+                    (qr.label for qr in _menu_quick_replies(request) if qr.id == flow_id),
+                    flow_id,
+                )
+                tracing.set_span_io(input={"user": f"Selected topic: {_topic_label}"})
                 result = await graph.ainvoke(state_dict, lg_config)
                 result_status = result.get("status", "active")
-                tracing.set_trace_io(
-                    input={"flow_id": flow_id, "action": "topic_selected", "user_choice": flow_id},
-                    output={"status": result_status, "node": result.get("current_node")},
+                _bot_reply = _first_bot_text(result.get("pending_activities") or [])
+                tracing.set_span_io(
+                    input={"user": f"Selected topic: {_topic_label}"},
+                    output={"bot": _bot_reply, "next_node": result.get("current_node"), "status": str(result_status)},
                 )
         except Exception as exc:  # noqa: BLE001
             log.exception("Flow start error for %s", flow_id)
@@ -483,31 +494,22 @@ async def submit_turn(
             turn_count=session["turn_count"],
         ):
             _lf_tid_active, _lf_oid_active = tracing.get_current_span_ids()
-            tracing.set_trace_io(
-                input={
-                    "action": body.action,
-                    "node": current_state_values.get("current_node"),
-                    "user_choice": _user_choice,
-                    **({f"choice_id": body.choice_id} if body.choice_id else {}),
-                }
-            )
+            # Build a human-readable user label — never log raw text (PII)
+            _current_node = current_state_values.get("current_node", "")
+            _user_label = _user_input_label(body, _user_choice, _current_node, flow_yaml)
+            tracing.set_span_io(input={"user": _user_label, "node": _current_node})
             await graph.aupdate_state(lg_config, update)
             result = await graph.ainvoke(None, lg_config)
             result_status = result.get("status", "active")
-            tracing.set_trace_io(
-                input={
-                    "action": body.action,
-                    "node": current_state_values.get("current_node"),
-                    "user_choice": _user_choice,
-                    **({f"choice_id": body.choice_id} if body.choice_id else {}),
-                },
-                output={
-                    "status": result_status,
-                    "node": result.get("current_node"),
-                    "activities": len(result.get("pending_activities") or []),
-                    **({"ticket_id": result.get("zoho_ticket_id")} if result.get("zoho_ticket_id") else {}),
-                },
-            )
+            _bot_reply = _first_bot_text(result.get("pending_activities") or [])
+            _out: dict = {
+                "bot": _bot_reply,
+                "next_node": result.get("current_node"),
+                "status": str(result_status),
+            }
+            if result.get("zoho_ticket_id"):
+                _out["ticket_id"] = result["zoho_ticket_id"]
+            tracing.set_span_io(input={"user": _user_label, "node": _current_node}, output=_out)
     except Exception as exc:  # noqa: BLE001
         log.exception("Flow resume error for session %s", sid)
         raise HTTPException(status_code=500, detail=f"Flow error: {exc}") from exc
@@ -687,6 +689,56 @@ async def delete_session(session_id: UUID, claims: dict[str, Any] = Depends(requ
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _first_bot_text(activities: list[dict]) -> str:
+    """Extract the first markdown/text message from a list of bot activities.
+
+    Used to populate the Langfuse span output so the dashboard shows what the
+    bot actually said rather than just an activity count.  Returns a short
+    preview (≤200 chars) so it fits in Langfuse's metadata column.
+    """
+    for act in activities:
+        text = act.get("text") or act.get("content") or act.get("message") or ""
+        if isinstance(text, str) and text.strip():
+            return text.strip()[:200]
+    return f"[{len(activities)} activities]"
+
+
+def _user_input_label(
+    body: "TurnRequest",
+    user_choice: str | None,
+    current_node: str,
+    flow: dict | None,
+) -> str:
+    """Build a human-readable, PII-safe label for what the user just did.
+
+    • Choice actions  → the button label the user clicked
+    • Pick-item       → the item label selected from a list
+    • Send-message    → "Entered: <field_name>" (never the actual text — PII)
+    • Fallback        → the action name
+    """
+    if body.action == "send_message":
+        node_cfg = _find_node(flow, current_node)
+        field_name = ""
+        if node_cfg:
+            for p in (node_cfg.get("prompts") or []):
+                if not isinstance(p, dict):
+                    continue
+                fname = p.get("field", "").removeprefix("collected.")
+                # We don't have access to collected here, so return first prompt field
+                field_name = p.get("label") or fname
+                break
+            if not field_name:
+                fc = node_cfg.get("field") or {}
+                field_name = fc.get("label") or fc.get("name", "").removeprefix("collected.") or current_node
+        return f"Entered: {field_name or 'text input'}"
+
+    # For choice / pick_item actions use the resolved label
+    if user_choice and user_choice != body.action:
+        return f"Selected: {user_choice}"
+
+    return body.action
+
 
 def _build_state_update(
     body: TurnRequest,
