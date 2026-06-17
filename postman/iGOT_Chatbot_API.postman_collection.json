@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
     "name": "iGOT Deterministic Chatbot API",
-    "description": "## Quick setup\n\n1. Set collection variables: `base_url` (default `http://localhost:8000`) and `auth_token`.\n2. **Local dev:** set `AUTH_DISABLED=true` in `.env` and use any UUID as `auth_token`.\n3. **Production / UAT:** set `AUTH_DISABLED=false` and paste a real Keycloak JWT as `auth_token`.\n\n## Typical flow\n```\nGET  /sessions/list              → session found? go to history : start fresh\nGET  /sessions/history/{id}      → messages non-empty? resume : start fresh\nPOST /sessions/create                   → start fresh (get session_id, auto-saved)\nPOST /sessions/create/turn/{id}         → repeat until response has type:end\n```\n\n## Activity type → next action mapping\n\nEvery `/turn` response has `activities[]`. Each entry has a `type` field:\n\n| Response activity type | What to render | Next action to send |\n|---|---|---|\n| `markdown` | Chat bubble with Markdown | Nothing — render and wait for the next activity |\n| `quick_replies` | Row of tappable buttons | `select_choice` with `choice_id` from `choices[].id` |\n| `picker` | Searchable scrollable list | `pick_item` with `picker_id`, `item_id`, `item_label` from the picker |\n| `input` | Free-text input box | `send_message` with `text` = what the user typed |\n| `end` | End-of-conversation banner | Nothing — session is over |\n| `text` | Plain text bubble (no Markdown) | Only sent on **session expiry** — call `POST /sessions/create` to restart |\n| `typing` | Loading animation | Not emitted by any current flow — reserved for future streaming |\n\n**Multiple activities in one response:** render all of them top-to-bottom, then send ONE action in reply to the last interactive one (quick_replies / picker / input). markdown and typing activities don't need a reply on their own.",
+    "description": "## Quick setup\n\n1. Set collection variables: `base_url`, `auth_token`, and `kong_token`.\n2. **Local dev:** set `AUTH_DISABLED=true` in `.env`, use any UUID as `auth_token`, leave `kong_token` empty.\n3. **Dev / UAT (Kong):** set `base_url` to `https://portal.dev.karmayogibharat.net/api`, paste Keycloak JWT as `auth_token`, paste Kong JWT as `kong_token`.\n\nTwo auth headers are required when calling through Kong:\n- `x-authenticated-user-token` — Keycloak JWT (identifies the user)\n- `Authorization: Bearer` — Kong JWT (authorizes API access)\n\n## Typical flow\n```\nGET  /sessions/list              → session found? go to history : start fresh\nGET  /sessions/history/{id}      → messages non-empty? resume : start fresh\nPOST /sessions/create                   → start fresh (get session_id, auto-saved)\nPOST /sessions/turn/{id}         → repeat until response has type:end\n```\n\n## Activity type → next action mapping\n\nEvery `/turn` response has `activities[]`. Each entry has a `type` field:\n\n| Response activity type | What to render | Next action to send |\n|---|---|---|\n| `markdown` | Chat bubble with Markdown | Nothing — render and wait for the next activity |\n| `quick_replies` | Row of tappable buttons | `select_choice` with `choice_id` from `choices[].id` |\n| `picker` | Searchable scrollable list | `pick_item` with `picker_id`, `item_id`, `item_label` from the picker |\n| `input` | Free-text input box | `send_message` with `text` = what the user typed |\n| `end` | End-of-conversation banner | Nothing — session is over |\n| `text` | Plain text bubble (no Markdown) | Only sent on **session expiry** — call `POST /sessions/create` to restart |\n| `typing` | Loading animation | Not emitted by any current flow — reserved for future streaming |\n\n**Multiple activities in one response:** render all of them top-to-bottom, then send ONE action in reply to the last interactive one (quick_replies / picker / input). markdown and typing activities don't need a reply on their own.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -10,7 +10,7 @@
       "key": "base_url",
       "value": "http://localhost:8000",
       "type": "string",
-      "description": "Change to https://portal.dev.karmayogibharat.net/deterministic-chatbot for UAT/dev."
+      "description": "Local: http://localhost:8000 | Dev/UAT: https://portal.dev.karmayogibharat.net/api"
     },
     {
       "key": "session_id",
@@ -20,9 +20,15 @@
     },
     {
       "key": "auth_token",
-      "value": "00000000-0000-0000-0000-000000000001",
+      "value": "<paste-keycloak-jwt-here>",
       "type": "string",
-      "description": "Local dev (AUTH_DISABLED=true): any UUID works. Production: paste real Keycloak JWT here."
+      "description": "Keycloak JWT (x-authenticated-user-token). Local dev (AUTH_DISABLED=true): any UUID. Dev/UAT/Prod: real Keycloak JWT."
+    },
+    {
+      "key": "kong_token",
+      "value": "<paste-kong-jwt-here>",
+      "type": "string",
+      "description": "Kong API gateway JWT. Required when calling through Kong (dev/UAT/prod). Leave empty for local dev."
     }
   ],
   "item": [
@@ -37,8 +43,12 @@
             "header": [],
             "url": {
               "raw": "{{base_url}}/health",
-              "host": ["{{base_url}}"],
-              "path": ["health"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "health"
+              ]
             },
             "description": "Liveness probe. No auth required.\n\nExpected: `{\"status\": \"ok\"}`"
           },
@@ -72,12 +82,25 @@
                 "key": "x-authenticated-user-token",
                 "value": "{{auth_token}}",
                 "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{kong_token}}",
+                "type": "text",
+                "description": "Kong API gateway JWT — required when calling through Kong (dev/UAT/prod)"
               }
             ],
             "url": {
               "raw": "{{base_url}}/ai-chatbot/v1/sessions/list",
-              "host": ["{{base_url}}"],
-              "path": ["ai-chatbot", "v1", "sessions", "list"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ai-chatbot",
+                "v1",
+                "sessions",
+                "list"
+              ]
             },
             "description": "Call this first on every app open.\n\n**Response — session found:**\n```json\n{ \"session_id\": \"<uuid>\", \"status\": \"in_flow\", \"flow_id\": \"AUTO_LOGOUT_CRASH\" }\n```\n→ Call GET /sessions/history/{id} next.\n- messages[] non-empty → render thread, last role:bot entry = current prompt\n- messages[] empty → call POST /sessions/create/create instead (user hadn't picked a topic yet)\n\n**Response — no active session:**\n```json\n{ \"session_id\": null }\n```\n→ Call POST /sessions/create to start fresh.\n\nAlways returns 200 — never errors. Returns null when Redis is unavailable (safe fallback)."
           },
@@ -112,6 +135,12 @@
                 "type": "text"
               },
               {
+                "key": "Authorization",
+                "value": "Bearer {{kong_token}}",
+                "type": "text",
+                "description": "Kong API gateway JWT — required when calling through Kong (dev/UAT/prod)"
+              },
+              {
                 "key": "Content-Type",
                 "value": "application/json",
                 "type": "text"
@@ -120,12 +149,23 @@
             "body": {
               "mode": "raw",
               "raw": "{\n  // \"web\" | \"mobile\" | \"whatsapp\" | \"voice\" — the channel the user is on\n  \"channel\": \"web\",\n  // BCP-47 language code — \"en\" for English, \"hi\" for Hindi\n  \"language\": \"en\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/ai-chatbot/v1/sessions/create",
-              "host": ["{{base_url}}"],
-              "path": ["ai-chatbot", "v1", "sessions", "create"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ai-chatbot",
+                "v1",
+                "sessions",
+                "create"
+              ]
             },
             "description": "Creates a new chat session. Call this when GET /sessions/list returns null.\n\n`channel`: `web` | `mobile` | `whatsapp` | `voice`\n`language`: `en` | `hi` | any BCP-47 code\n\n**Response contains:**\n- `session_id` — save this, used in every subsequent request (auto-saved by test script)\n- `activities[]` — greeting message + topic picker (14 topics as quick_reply buttons)\n- `status: \"awaiting_user\"`\n\nNext: call POST /sessions/create/turn/{session_id} with the topic the user picks."
           },
@@ -136,12 +176,30 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "x-authenticated-user-token", "value": "{{auth_token}}", "type": "text" }
+              {
+                "key": "x-authenticated-user-token",
+                "value": "{{auth_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{kong_token}}",
+                "type": "text",
+                "description": "Kong API gateway JWT — required when calling through Kong (dev/UAT/prod)"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/ai-chatbot/v1/sessions/history/{{session_id}}",
-              "host": ["{{base_url}}"],
-              "path": ["ai-chatbot", "v1", "sessions", "history", "{{session_id}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ai-chatbot",
+                "v1",
+                "sessions",
+                "history",
+                "{{session_id}}"
+              ]
             },
             "description": "WHY: Returns every user action and bot response from the start of the session — so the UI can render a full scrollable chat thread, not just the last bot message.\n\n{{session_id}} — from POST /sessions/create/create response (auto-saved).\n\nResponse: messages[] array in chronological order.\n- role 'bot': render activities[] using the same code as a /turn response\n- role 'user': render text as user bubble\n- Last entry is always role 'bot' — the current state awaiting input\n\nReturns messages: [] for new sessions before any topic is selected, or sessions started before history tracking was added."
           },
@@ -158,6 +216,12 @@
                 "type": "text"
               },
               {
+                "key": "Authorization",
+                "value": "Bearer {{kong_token}}",
+                "type": "text",
+                "description": "Kong API gateway JWT — required when calling through Kong (dev/UAT/prod)"
+              },
+              {
                 "key": "Content-Type",
                 "value": "application/json",
                 "type": "text"
@@ -166,12 +230,24 @@
             "body": {
               "mode": "raw",
               "raw": "{\n  // ── PICK ONE action type — delete the other two before sending ────────────\n\n  // select_choice: user tapped a quick-reply button\n  //   \"action\": \"select_choice\",\n  //   \"choice_id\": \"<id>\",     // from previous response → activities[].choices[].id\n  //   \"user_says\": \"<label>\"   // optional — the button label for the transcript\n\n  // send_message: user typed free text (only when disable_input is false)\n  //   \"action\": \"send_message\",\n  //   \"text\": \"<user typed text>\"\n\n  // pick_item: user selected from a dynamic list (course picker, etc.)\n  //   \"action\": \"pick_item\",\n  //   \"picker_id\": \"<id>\",     // from previous response → activities[].picker_id\n  //   \"item_id\":    \"<id>\",    // from previous response → activities[].items[n].id\n  //   \"item_label\": \"<label>\"  // from previous response → activities[].items[n].label\n\n  // ── Active example (select_choice) ─────────────────────────────────────\n  // \"select_choice\" — user tapped a quick-reply button; choice_id MUST come from the previous response\n  \"action\": \"select_choice\",\n  // From previous response → activities[].choices[].id  (NEVER hardcode)\n  \"choice_id\": \"REPLACE_WITH_CHOICE_ID\",\n  // Optional — the button label shown in the UI (for conversation transcript)\n  \"user_says\": \"REPLACE_WITH_BUTTON_LABEL\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/ai-chatbot/v1/sessions/turn/{{session_id}}",
-              "host": ["{{base_url}}"],
-              "path": ["ai-chatbot", "v1", "sessions", "turn", "{{session_id}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ai-chatbot",
+                "v1",
+                "sessions",
+                "turn",
+                "{{session_id}}"
+              ]
             },
             "description": "Sends a user action and receives the bot's next activities.\n\n`{{session_id}}` — from POST /sessions/create/create response (auto-saved).\n\n**Action types and when to use each:**\n\n`select_choice` — user taps a quick-reply button:\n```json\n{ \"action\": \"select_choice\", \"choice_id\": \"<id from choices[]>\", \"user_says\": \"<button label>\" }\n```\n\n`send_message` — user types free text (only when disable_input is false):\n```json\n{ \"action\": \"send_message\", \"text\": \"user typed this\" }\n```\n\n`pick_item` — user selects from a dynamic list (course picker, etc.):\n```json\n{ \"action\": \"pick_item\", \"picker_id\": \"<from picker activity>\", \"item_id\": \"<id>\", \"item_label\": \"<label>\" }\n```\n\n**choice_id and picker_id always come from the previous response's activities[]** — never hardcode them.\n\nRepeat until `activities[]` contains `{ \"type\": \"end\" }` — that means the conversation is complete."
           },
@@ -186,12 +262,27 @@
                 "key": "x-authenticated-user-token",
                 "value": "{{auth_token}}",
                 "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{kong_token}}",
+                "type": "text",
+                "description": "Kong API gateway JWT — required when calling through Kong (dev/UAT/prod)"
               }
             ],
             "url": {
               "raw": "{{base_url}}/ai-chatbot/v1/admin/sessions/{{session_id}}/trace",
-              "host": ["{{base_url}}"],
-              "path": ["ai-chatbot", "v1", "admin", "sessions", "{{session_id}}", "trace"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ai-chatbot",
+                "v1",
+                "admin",
+                "sessions",
+                "{{session_id}}",
+                "trace"
+              ]
             },
             "description": "Returns the full conversation trace (every node visited, branch decisions, API calls). Not yet implemented — returns HTTP 501.\n\n`{{session_id}}` — from POST /sessions/create/create response."
           },
@@ -206,12 +297,26 @@
                 "key": "x-authenticated-user-token",
                 "value": "{{auth_token}}",
                 "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{kong_token}}",
+                "type": "text",
+                "description": "Kong API gateway JWT — required when calling through Kong (dev/UAT/prod)"
               }
             ],
             "url": {
               "raw": "{{base_url}}/ai-chatbot/v1/admin/sessions/{{session_id}}",
-              "host": ["{{base_url}}"],
-              "path": ["ai-chatbot", "v1", "admin", "sessions", "{{session_id}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ai-chatbot",
+                "v1",
+                "admin",
+                "sessions",
+                "{{session_id}}"
+              ]
             },
             "description": "Deletes all personal data for a session (DPDP / right-to-erasure). Not yet implemented — returns HTTP 501.\n\n`{{session_id}}` — from POST /sessions/create/create response."
           },
@@ -245,18 +350,43 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "x-authenticated-user-token", "value": "{{auth_token}}", "type": "text" },
-              { "key": "Content-Type", "value": "application/json", "type": "text" }
+              {
+                "key": "x-authenticated-user-token",
+                "value": "{{auth_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{kong_token}}",
+                "type": "text",
+                "description": "Kong API gateway JWT — required when calling through Kong (dev/UAT/prod)"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  // \"web\" | \"mobile\" | \"whatsapp\" | \"voice\" — the channel the user is on\n  \"channel\": \"web\",\n  // BCP-47 language code — \"en\" for English, \"hi\" for Hindi\n  \"language\": \"en\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/ai-chatbot/v1/sessions/create",
-              "host": ["{{base_url}}"],
-              "path": ["ai-chatbot", "v1", "sessions", "create"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ai-chatbot",
+                "v1",
+                "sessions",
+                "create"
+              ]
             },
             "description": "Creates a new session.\n\nResponse: greeting + 14 topic buttons. session_id is auto-saved to {{session_id}} by the test script."
           },
@@ -267,18 +397,44 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "x-authenticated-user-token", "value": "{{auth_token}}", "type": "text" },
-              { "key": "Content-Type", "value": "application/json", "type": "text" }
+              {
+                "key": "x-authenticated-user-token",
+                "value": "{{auth_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{kong_token}}",
+                "type": "text",
+                "description": "Kong API gateway JWT — required when calling through Kong (dev/UAT/prod)"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  // \"select_choice\" — user tapped a quick-reply button; choice_id MUST come from the previous response\n  \"action\": \"select_choice\",\n  // choice_id comes from Step 1 response → activities[1].choices[].id\n  \"choice_id\": \"AUTO_LOGOUT_CRASH\",\n  // Optional — the button label shown in the UI (for conversation transcript)\n  \"user_says\": \"Auto logout / App crash\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/ai-chatbot/v1/sessions/turn/{{session_id}}",
-              "host": ["{{base_url}}"],
-              "path": ["ai-chatbot", "v1", "sessions", "turn", "{{session_id}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ai-chatbot",
+                "v1",
+                "sessions",
+                "turn",
+                "{{session_id}}"
+              ]
             },
             "description": "{{session_id}} — auto-filled from Step 1.\nchoice_id — taken from Step 1 response, activities[1].choices[].id\n\nResponse: bot asks 'Android or iPhone?' with choice_id 'android' and 'ios'."
           },
@@ -289,18 +445,44 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "x-authenticated-user-token", "value": "{{auth_token}}", "type": "text" },
-              { "key": "Content-Type", "value": "application/json", "type": "text" }
+              {
+                "key": "x-authenticated-user-token",
+                "value": "{{auth_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{kong_token}}",
+                "type": "text",
+                "description": "Kong API gateway JWT — required when calling through Kong (dev/UAT/prod)"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  // \"select_choice\" — user tapped a quick-reply button; choice_id MUST come from the previous response\n  \"action\": \"select_choice\",\n  // choice_id comes from Step 2 response → activities[1].choices[].id\n  \"choice_id\": \"android\",\n  // Optional — the button label shown in the UI (for conversation transcript)\n  \"user_says\": \"Android\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/ai-chatbot/v1/sessions/turn/{{session_id}}",
-              "host": ["{{base_url}}"],
-              "path": ["ai-chatbot", "v1", "sessions", "turn", "{{session_id}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ai-chatbot",
+                "v1",
+                "sessions",
+                "turn",
+                "{{session_id}}"
+              ]
             },
             "description": "{{session_id}} — auto-filled from Step 1.\nchoice_id — taken from Step 2 response, activities[].choices[].id\n\nAlternative: send 'ios' for iPhone-specific steps.\n\nResponse: numbered clear-cache steps + 'Has the issue been resolved?' with choices 'yes' and 'no'."
           },
@@ -311,18 +493,44 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "x-authenticated-user-token", "value": "{{auth_token}}", "type": "text" },
-              { "key": "Content-Type", "value": "application/json", "type": "text" }
+              {
+                "key": "x-authenticated-user-token",
+                "value": "{{auth_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{kong_token}}",
+                "type": "text",
+                "description": "Kong API gateway JWT — required when calling through Kong (dev/UAT/prod)"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  // \"select_choice\" — user tapped a quick-reply button; choice_id MUST come from the previous response\n  \"action\": \"select_choice\",\n  // choice_id comes from Step 3 response → activities[2].choices[].id\n  \"choice_id\": \"yes\",\n  // Optional — the button label shown in the UI (for conversation transcript)\n  \"user_says\": \"Yes, issue is resolved\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/ai-chatbot/v1/sessions/turn/{{session_id}}",
-              "host": ["{{base_url}}"],
-              "path": ["ai-chatbot", "v1", "sessions", "turn", "{{session_id}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ai-chatbot",
+                "v1",
+                "sessions",
+                "turn",
+                "{{session_id}}"
+              ]
             },
             "description": "{{session_id}} — auto-filled from Step 1.\nchoice_id — taken from Step 3 response, activities[].choices[].id\n\nAlternative: send 'no' to escalate to a support ticket.\n\nExpected response:\n- activities[0]: markdown 'Glad I could help 🙏'\n- activities[1]: { \"type\": \"end\", \"outcome\": \"self_served\" }\n- status: 'satisfied'\n\nAfter this: GET /sessions/list returns null — session is cleared from Redis."
           },
@@ -333,12 +541,30 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "x-authenticated-user-token", "value": "{{auth_token}}", "type": "text" }
+              {
+                "key": "x-authenticated-user-token",
+                "value": "{{auth_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{kong_token}}",
+                "type": "text",
+                "description": "Kong API gateway JWT — required when calling through Kong (dev/UAT/prod)"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/ai-chatbot/v1/sessions/history/{{session_id}}",
-              "host": ["{{base_url}}"],
-              "path": ["ai-chatbot", "v1", "sessions", "history", "{{session_id}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ai-chatbot",
+                "v1",
+                "sessions",
+                "history",
+                "{{session_id}}"
+              ]
             },
             "description": "{{session_id}} from Step 1.\n\nRun this after Step 4 to see the full conversation thread that was just completed.\n\nExpected: messages[] with 3 bot entries (device question, clear-cache steps, resolved) and 3 user entries (topic selection, Android, yes).\n\nNote: initial greeting (welcome + topic picker) is not included — history starts from first topic selection."
           },
@@ -362,20 +588,36 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "x-authenticated-user-token", "value": "{{auth_token}}", "type": "text" }
+              {
+                "key": "x-authenticated-user-token",
+                "value": "{{auth_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{kong_token}}",
+                "type": "text",
+                "description": "Kong API gateway JWT — required when calling through Kong (dev/UAT/prod)"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/ai-chatbot/v1/sessions/list",
-              "host": ["{{base_url}}"],
-              "path": ["ai-chatbot", "v1", "sessions", "list"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ai-chatbot",
+                "v1",
+                "sessions",
+                "list"
+              ]
             },
             "description": "Optional verification step after the flow ends.\n\nExpected: { \"session_id\": null } — confirms Redis cleaned up the session on the 'end' node.\n\nIf Redis is not running locally, this will also return null (Redis unavailable fallback)."
           },
           "response": []
         }
       ]
-    }
-  ,
+    },
     {
       "name": "3 — Demo: CERTIFICATE_DOWNLOAD — C1 (Not generated)",
       "description": "Certificate not generated / not received — happy path where the course is completed and the certificate is available to download.\n\nRequires a real Keycloak JWT (AUTH_DISABLED=false) so the course picker returns the user's actual enrolled courses.\n\nPath: Start → CERTIFICATE_DOWNLOAD → C1 → pick course → resolution steps → resolved → END",
@@ -398,18 +640,43 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "x-authenticated-user-token", "value": "{{auth_token}}", "type": "text" },
-              { "key": "Content-Type", "value": "application/json", "type": "text" }
+              {
+                "key": "x-authenticated-user-token",
+                "value": "{{auth_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{kong_token}}",
+                "type": "text",
+                "description": "Kong API gateway JWT — required when calling through Kong (dev/UAT/prod)"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  // \"web\" | \"mobile\" | \"whatsapp\" | \"voice\" — the channel the user is on\n  \"channel\": \"web\",\n  // BCP-47 language code — \"en\" for English, \"hi\" for Hindi\n  \"language\": \"en\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/ai-chatbot/v1/sessions/create",
-              "host": ["{{base_url}}"],
-              "path": ["ai-chatbot", "v1", "sessions", "create"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ai-chatbot",
+                "v1",
+                "sessions",
+                "create"
+              ]
             },
             "description": "Creates a new session. session_id auto-saved by test script.\n\nResponse: greeting + 14 topic quick_reply buttons."
           },
@@ -420,18 +687,44 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "x-authenticated-user-token", "value": "{{auth_token}}", "type": "text" },
-              { "key": "Content-Type", "value": "application/json", "type": "text" }
+              {
+                "key": "x-authenticated-user-token",
+                "value": "{{auth_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{kong_token}}",
+                "type": "text",
+                "description": "Kong API gateway JWT — required when calling through Kong (dev/UAT/prod)"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  // \"select_choice\" — user tapped a quick-reply button; choice_id MUST come from the previous response\n  \"action\": \"select_choice\",\n  // choice_id from Step 1 response → activities[1].choices[].id\n  \"choice_id\": \"CERTIFICATE_DOWNLOAD\",\n  // Optional — the button label shown in the UI (for conversation transcript)\n  \"user_says\": \"Certificate issue\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/ai-chatbot/v1/sessions/turn/{{session_id}}",
-              "host": ["{{base_url}}"],
-              "path": ["ai-chatbot", "v1", "sessions", "turn", "{{session_id}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ai-chatbot",
+                "v1",
+                "sessions",
+                "turn",
+                "{{session_id}}"
+              ]
             },
             "description": "{{session_id}} auto-filled from Step 1.\n\nResponse: 'What's the issue with your certificate?' with two choices:\n- C1: Certificate not generated / not received\n- C3: Incorrect name on certificate"
           },
@@ -442,18 +735,44 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "x-authenticated-user-token", "value": "{{auth_token}}", "type": "text" },
-              { "key": "Content-Type", "value": "application/json", "type": "text" }
+              {
+                "key": "x-authenticated-user-token",
+                "value": "{{auth_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{kong_token}}",
+                "type": "text",
+                "description": "Kong API gateway JWT — required when calling through Kong (dev/UAT/prod)"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  // \"select_choice\" — user tapped a quick-reply button; choice_id MUST come from the previous response\n  \"action\": \"select_choice\",\n  // choice_id from Step 2 response → activities[1].choices[].id\n  \"choice_id\": \"C1\",\n  // Optional — the button label shown in the UI (for conversation transcript)\n  \"user_says\": \"Certificate not generated / not received\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/ai-chatbot/v1/sessions/turn/{{session_id}}",
-              "host": ["{{base_url}}"],
-              "path": ["ai-chatbot", "v1", "sessions", "turn", "{{session_id}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ai-chatbot",
+                "v1",
+                "sessions",
+                "turn",
+                "{{session_id}}"
+              ]
             },
             "description": "Response: course picker asking which course has the certificate issue.\n\nactivities[1] will be type 'picker' with:\n- picker_id: 'collected.c1_course_id'  ← use this in Step 4\n- items[]: list of user's enrolled courses (requires real JWT)\n\nEach item in items[]: { id, label } — pick one for Step 4."
           },
@@ -464,18 +783,44 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "x-authenticated-user-token", "value": "{{auth_token}}", "type": "text" },
-              { "key": "Content-Type", "value": "application/json", "type": "text" }
+              {
+                "key": "x-authenticated-user-token",
+                "value": "{{auth_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{kong_token}}",
+                "type": "text",
+                "description": "Kong API gateway JWT — required when calling through Kong (dev/UAT/prod)"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  // \"pick_item\" — user selected from a dynamic picker list; picker_id, item_id, item_label all come from the previous response\n  \"action\": \"pick_item\",\n  // picker_id from Step 3 response → activities[1].picker_id\n  \"picker_id\": \"collected.c1_course_id\",\n  // item_id and item_label from Step 3 response → activities[1].items[n]\n  \"item_id\": \"REPLACE_WITH_COURSE_ID_FROM_ITEMS\",\n  \"item_label\": \"REPLACE_WITH_COURSE_NAME_FROM_ITEMS\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/ai-chatbot/v1/sessions/turn/{{session_id}}",
-              "host": ["{{base_url}}"],
-              "path": ["ai-chatbot", "v1", "sessions", "turn", "{{session_id}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ai-chatbot",
+                "v1",
+                "sessions",
+                "turn",
+                "{{session_id}}"
+              ]
             },
             "description": "picker_id: always 'collected.c1_course_id' for this flow.\nitem_id + item_label: copy from Step 3 response → activities[1].items[n].id and .label\n\nThe server checks enrollment status and branches:\n- Course completed + 24h elapsed → shows download steps → go to Step 5\n- Course completed + < 24h → 'Wait 24 hours' → END\n- Course in-progress → shows pending resources → go to Step 5\n- Course not started → shows completion steps → go to Step 5\n- Course not found → re-shows picker (repeat Step 4 with correct item)"
           },
@@ -486,18 +831,44 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "x-authenticated-user-token", "value": "{{auth_token}}", "type": "text" },
-              { "key": "Content-Type", "value": "application/json", "type": "text" }
+              {
+                "key": "x-authenticated-user-token",
+                "value": "{{auth_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{kong_token}}",
+                "type": "text",
+                "description": "Kong API gateway JWT — required when calling through Kong (dev/UAT/prod)"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  // \"select_choice\" — user tapped a quick-reply button; choice_id MUST come from the previous response\n  \"action\": \"select_choice\",\n  // choice_id from Step 4 response → activities[last].choices[].id\n  \"choice_id\": \"yes\",\n  // Optional — the button label shown in the UI (for conversation transcript)\n  \"user_says\": \"Yes, resolved\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/ai-chatbot/v1/sessions/turn/{{session_id}}",
-              "host": ["{{base_url}}"],
-              "path": ["ai-chatbot", "v1", "sessions", "turn", "{{session_id}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ai-chatbot",
+                "v1",
+                "sessions",
+                "turn",
+                "{{session_id}}"
+              ]
             },
             "description": "choice_id from Step 4 response → last activity's choices[].id (yes / no)\n\nSend 'yes' → status: satisfied, type: end, outcome: self_served\nSend 'no' → LLM auto-raises a Zoho support ticket → confirm_ticket activity → END"
           },
@@ -527,18 +898,43 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "x-authenticated-user-token", "value": "{{auth_token}}", "type": "text" },
-              { "key": "Content-Type", "value": "application/json", "type": "text" }
+              {
+                "key": "x-authenticated-user-token",
+                "value": "{{auth_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{kong_token}}",
+                "type": "text",
+                "description": "Kong API gateway JWT — required when calling through Kong (dev/UAT/prod)"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  // \"web\" | \"mobile\" | \"whatsapp\" | \"voice\" — the channel the user is on\n  \"channel\": \"web\",\n  // BCP-47 language code — \"en\" for English, \"hi\" for Hindi\n  \"language\": \"en\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/ai-chatbot/v1/sessions/create",
-              "host": ["{{base_url}}"],
-              "path": ["ai-chatbot", "v1", "sessions", "create"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ai-chatbot",
+                "v1",
+                "sessions",
+                "create"
+              ]
             },
             "description": "Creates a new session. session_id auto-saved by test script."
           },
@@ -549,18 +945,44 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "x-authenticated-user-token", "value": "{{auth_token}}", "type": "text" },
-              { "key": "Content-Type", "value": "application/json", "type": "text" }
+              {
+                "key": "x-authenticated-user-token",
+                "value": "{{auth_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{kong_token}}",
+                "type": "text",
+                "description": "Kong API gateway JWT — required when calling through Kong (dev/UAT/prod)"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  // \"select_choice\" — user tapped a quick-reply button; choice_id MUST come from the previous response\n  \"action\": \"select_choice\",\n  // choice_id from Step 1 response → activities[1].choices[].id\n  \"choice_id\": \"CERTIFICATE_DOWNLOAD\",\n  // Optional — the button label shown in the UI (for conversation transcript)\n  \"user_says\": \"Certificate issue\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/ai-chatbot/v1/sessions/turn/{{session_id}}",
-              "host": ["{{base_url}}"],
-              "path": ["ai-chatbot", "v1", "sessions", "turn", "{{session_id}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ai-chatbot",
+                "v1",
+                "sessions",
+                "turn",
+                "{{session_id}}"
+              ]
             },
             "description": "Response: 'What's the issue?' with C1 and C3 buttons."
           },
@@ -571,18 +993,44 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "x-authenticated-user-token", "value": "{{auth_token}}", "type": "text" },
-              { "key": "Content-Type", "value": "application/json", "type": "text" }
+              {
+                "key": "x-authenticated-user-token",
+                "value": "{{auth_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{kong_token}}",
+                "type": "text",
+                "description": "Kong API gateway JWT — required when calling through Kong (dev/UAT/prod)"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  // \"select_choice\" — user tapped a quick-reply button; choice_id MUST come from the previous response\n  \"action\": \"select_choice\",\n  // choice_id from Step 2 response → activities[1].choices[].id\n  \"choice_id\": \"C3\",\n  // Optional — the button label shown in the UI (for conversation transcript)\n  \"user_says\": \"Incorrect name on certificate\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/ai-chatbot/v1/sessions/turn/{{session_id}}",
-              "host": ["{{base_url}}"],
-              "path": ["ai-chatbot", "v1", "sessions", "turn", "{{session_id}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ai-chatbot",
+                "v1",
+                "sessions",
+                "turn",
+                "{{session_id}}"
+              ]
             },
             "description": "Response: course picker asking which course has the wrong name.\n\nactivities[1]: type 'picker' with:\n- picker_id: 'collected.c3_course_id'  ← use in Step 4\n- items[]: user's completed enrolled courses"
           },
@@ -593,18 +1041,44 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "x-authenticated-user-token", "value": "{{auth_token}}", "type": "text" },
-              { "key": "Content-Type", "value": "application/json", "type": "text" }
+              {
+                "key": "x-authenticated-user-token",
+                "value": "{{auth_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{kong_token}}",
+                "type": "text",
+                "description": "Kong API gateway JWT — required when calling through Kong (dev/UAT/prod)"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  // \"pick_item\" — user selected from a dynamic picker list; picker_id, item_id, item_label all come from the previous response\n  \"action\": \"pick_item\",\n  // picker_id from Step 3 response → activities[1].picker_id\n  \"picker_id\": \"collected.c3_course_id\",\n  // item_id and item_label from Step 3 response → activities[1].items[n]\n  \"item_id\": \"REPLACE_WITH_COURSE_ID_FROM_ITEMS\",\n  \"item_label\": \"REPLACE_WITH_COURSE_NAME_FROM_ITEMS\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/ai-chatbot/v1/sessions/turn/{{session_id}}",
-              "host": ["{{base_url}}"],
-              "path": ["ai-chatbot", "v1", "sessions", "turn", "{{session_id}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ai-chatbot",
+                "v1",
+                "sessions",
+                "turn",
+                "{{session_id}}"
+              ]
             },
             "description": "picker_id: always 'collected.c3_course_id' for this flow.\nitem_id + item_label: copy from Step 3 → activities[1].items[n]\n\nThe server fetches the user's current profile name from Karmayogi and returns:\n'Your certificate for <course> was generated with the name: <First> <Last>. Would you like to update this name?'\n- choices: yes / no\n\nSend 'yes' → continue to Step 5 (name correction)\nSend 'no' → END ('No problem, name stays unchanged')"
           },
@@ -615,18 +1089,44 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "x-authenticated-user-token", "value": "{{auth_token}}", "type": "text" },
-              { "key": "Content-Type", "value": "application/json", "type": "text" }
+              {
+                "key": "x-authenticated-user-token",
+                "value": "{{auth_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{kong_token}}",
+                "type": "text",
+                "description": "Kong API gateway JWT — required when calling through Kong (dev/UAT/prod)"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  // \"select_choice\" — user tapped a quick-reply button; choice_id MUST come from the previous response\n  \"action\": \"select_choice\",\n  // choice_id from Step 4 response → activities[last].choices[].id\n  \"choice_id\": \"yes\",\n  // Optional — the button label shown in the UI (for conversation transcript)\n  \"user_says\": \"Yes, update the name\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/ai-chatbot/v1/sessions/turn/{{session_id}}",
-              "host": ["{{base_url}}"],
-              "path": ["ai-chatbot", "v1", "sessions", "turn", "{{session_id}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ai-chatbot",
+                "v1",
+                "sessions",
+                "turn",
+                "{{session_id}}"
+              ]
             },
             "description": "Response contains TWO activities — this is the input type pattern:\n```json\n[\n  { \"type\": \"markdown\", \"content\": \"Please enter your correct **First Name** (as per government ID):\" },\n  { \"type\": \"input\", \"input_id\": \"collected.c3_new_first_name\", \"input_placeholder\": \"\" }\n]\n```\n\nRendering rule for `type: input`:\n1. Render the preceding `markdown` activity as a chat bubble (the question)\n2. Render the `input` activity as a free-text input box\n3. When the user submits → send `send_message` with `text: <what they typed>` (Step 6)\n\n`input_id` tells you which field is being collected — useful if you want to apply client-side validation (e.g. email pattern check before sending)."
           },
@@ -637,18 +1137,44 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "x-authenticated-user-token", "value": "{{auth_token}}", "type": "text" },
-              { "key": "Content-Type", "value": "application/json", "type": "text" }
+              {
+                "key": "x-authenticated-user-token",
+                "value": "{{auth_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{kong_token}}",
+                "type": "text",
+                "description": "Kong API gateway JWT — required when calling through Kong (dev/UAT/prod)"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  // \"send_message\" — user typed free text; only valid when disable_input is false in the previous response\n  \"action\": \"send_message\",\n  // Free text — user types their correct first name\n  \"text\": \"Ramesh\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/ai-chatbot/v1/sessions/turn/{{session_id}}",
-              "host": ["{{base_url}}"],
-              "path": ["ai-chatbot", "v1", "sessions", "turn", "{{session_id}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ai-chatbot",
+                "v1",
+                "sessions",
+                "turn",
+                "{{session_id}}"
+              ]
             },
             "description": "Responding to the `type: input` activity from Step 5.\n\n`action: send_message` is the correct action whenever the previous response contained `type: input`. The `text` field is whatever the user typed in the input box.\n\nResponse: another markdown + input pair asking for the Last Name (same pattern as Step 5 — repeat with Step 7)."
           },
@@ -659,18 +1185,44 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "x-authenticated-user-token", "value": "{{auth_token}}", "type": "text" },
-              { "key": "Content-Type", "value": "application/json", "type": "text" }
+              {
+                "key": "x-authenticated-user-token",
+                "value": "{{auth_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{kong_token}}",
+                "type": "text",
+                "description": "Kong API gateway JWT — required when calling through Kong (dev/UAT/prod)"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  // \"send_message\" — user typed free text; only valid when disable_input is false in the previous response\n  \"action\": \"send_message\",\n  // Free text — user types their correct last name\n  \"text\": \"Kumar\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/ai-chatbot/v1/sessions/turn/{{session_id}}",
-              "host": ["{{base_url}}"],
-              "path": ["ai-chatbot", "v1", "sessions", "turn", "{{session_id}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ai-chatbot",
+                "v1",
+                "sessions",
+                "turn",
+                "{{session_id}}"
+              ]
             },
             "description": "Responding to the `type: input` activity from Step 6.\n\nSame pattern as Step 6 — `action: send_message`, `text` is the user's last name.\n\nResponse: name confirmation with `quick_replies`:\n'Change certificate name from: <old> to: Ramesh Kumar. Shall we proceed?'\n- choices: yes (confirm) / no (re-enter name)\n\nSend 'yes' → Step 8 (API update)\nSend 'no' → bot re-asks for first name (repeat from Step 6)"
           },
@@ -681,18 +1233,44 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "x-authenticated-user-token", "value": "{{auth_token}}", "type": "text" },
-              { "key": "Content-Type", "value": "application/json", "type": "text" }
+              {
+                "key": "x-authenticated-user-token",
+                "value": "{{auth_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{kong_token}}",
+                "type": "text",
+                "description": "Kong API gateway JWT — required when calling through Kong (dev/UAT/prod)"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  // \"select_choice\" — user tapped a quick-reply button; choice_id MUST come from the previous response\n  \"action\": \"select_choice\",\n  // choice_id from Step 7 response → activities[last].choices[].id\n  \"choice_id\": \"yes\",\n  // Optional — the button label shown in the UI (for conversation transcript)\n  \"user_says\": \"Yes, confirm change\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/ai-chatbot/v1/sessions/turn/{{session_id}}",
-              "host": ["{{base_url}}"],
-              "path": ["ai-chatbot", "v1", "sessions", "turn", "{{session_id}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ai-chatbot",
+                "v1",
+                "sessions",
+                "turn",
+                "{{session_id}}"
+              ]
             },
             "description": "Triggers PATCH /api/user/private/v1/update on Karmayogi with the new name.\n\nOn success: '✅ Your name has been updated to Ramesh Kumar. To re-download certificate: go to Profile → My Learning → Completed → find course → Download Certificate'\nThen asks: 'Was the name correction successful?' → yes/no\n\nOn API failure: bot raises a Zoho support ticket automatically."
           },
@@ -703,18 +1281,44 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "x-authenticated-user-token", "value": "{{auth_token}}", "type": "text" },
-              { "key": "Content-Type", "value": "application/json", "type": "text" }
+              {
+                "key": "x-authenticated-user-token",
+                "value": "{{auth_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{kong_token}}",
+                "type": "text",
+                "description": "Kong API gateway JWT — required when calling through Kong (dev/UAT/prod)"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  // \"select_choice\" — user tapped a quick-reply button; choice_id MUST come from the previous response\n  \"action\": \"select_choice\",\n  // choice_id from Step 8 response → activities[last].choices[].id\n  \"choice_id\": \"yes\",\n  // Optional — the button label shown in the UI (for conversation transcript)\n  \"user_says\": \"Yes, resolved\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/ai-chatbot/v1/sessions/turn/{{session_id}}",
-              "host": ["{{base_url}}"],
-              "path": ["ai-chatbot", "v1", "sessions", "turn", "{{session_id}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ai-chatbot",
+                "v1",
+                "sessions",
+                "turn",
+                "{{session_id}}"
+              ]
             },
             "description": "choice_id from Step 8 response → activities[last].choices[].id\n\nSend 'yes' → status: satisfied, type: end, outcome: self_served\nSend 'no' → LLM auto-raises Zoho ticket with course name, old name, new name → confirm_ticket → END"
           },
@@ -744,18 +1348,43 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "x-authenticated-user-token", "value": "{{auth_token}}", "type": "text" },
-              { "key": "Content-Type", "value": "application/json", "type": "text" }
+              {
+                "key": "x-authenticated-user-token",
+                "value": "{{auth_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{kong_token}}",
+                "type": "text",
+                "description": "Kong API gateway JWT — required when calling through Kong (dev/UAT/prod)"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  // \"web\" | \"mobile\" | \"whatsapp\" | \"voice\" — the channel the user is on\n  \"channel\": \"web\",\n  // BCP-47 language code — \"en\" for English, \"hi\" for Hindi\n  \"language\": \"en\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/ai-chatbot/v1/sessions/create",
-              "host": ["{{base_url}}"],
-              "path": ["ai-chatbot", "v1", "sessions", "create"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ai-chatbot",
+                "v1",
+                "sessions",
+                "create"
+              ]
             },
             "description": "session_id auto-saved by test script."
           },
@@ -766,18 +1395,44 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "x-authenticated-user-token", "value": "{{auth_token}}", "type": "text" },
-              { "key": "Content-Type", "value": "application/json", "type": "text" }
+              {
+                "key": "x-authenticated-user-token",
+                "value": "{{auth_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{kong_token}}",
+                "type": "text",
+                "description": "Kong API gateway JWT — required when calling through Kong (dev/UAT/prod)"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  // \"select_choice\" — user tapped a quick-reply button; choice_id MUST come from the previous response\n  \"action\": \"select_choice\",\n  // choice_id from Step 1 response → activities[1].choices[].id\n  \"choice_id\": \"AUTO_LOGOUT_CRASH\",\n  // Optional — the button label shown in the UI (for conversation transcript)\n  \"user_says\": \"Auto logout / App crash\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/ai-chatbot/v1/sessions/turn/{{session_id}}",
-              "host": ["{{base_url}}"],
-              "path": ["ai-chatbot", "v1", "sessions", "turn", "{{session_id}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ai-chatbot",
+                "v1",
+                "sessions",
+                "turn",
+                "{{session_id}}"
+              ]
             },
             "description": "Response: 'Android or iPhone?' with choice_id 'android' and 'ios'."
           },
@@ -788,18 +1443,44 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "x-authenticated-user-token", "value": "{{auth_token}}", "type": "text" },
-              { "key": "Content-Type", "value": "application/json", "type": "text" }
+              {
+                "key": "x-authenticated-user-token",
+                "value": "{{auth_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{kong_token}}",
+                "type": "text",
+                "description": "Kong API gateway JWT — required when calling through Kong (dev/UAT/prod)"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  // \"select_choice\" — user tapped a quick-reply button; choice_id MUST come from the previous response\n  \"action\": \"select_choice\",\n  // choice_id from Step 2 response → activities[1].choices[].id\n  \"choice_id\": \"android\",\n  // Optional — the button label shown in the UI (for conversation transcript)\n  \"user_says\": \"Android\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/ai-chatbot/v1/sessions/turn/{{session_id}}",
-              "host": ["{{base_url}}"],
-              "path": ["ai-chatbot", "v1", "sessions", "turn", "{{session_id}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ai-chatbot",
+                "v1",
+                "sessions",
+                "turn",
+                "{{session_id}}"
+              ]
             },
             "description": "Response: clear-cache steps + 'Has the issue been resolved?' with choice_id 'yes' and 'no'."
           },
@@ -830,18 +1511,44 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "x-authenticated-user-token", "value": "{{auth_token}}", "type": "text" },
-              { "key": "Content-Type", "value": "application/json", "type": "text" }
+              {
+                "key": "x-authenticated-user-token",
+                "value": "{{auth_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{kong_token}}",
+                "type": "text",
+                "description": "Kong API gateway JWT — required when calling through Kong (dev/UAT/prod)"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  // \"select_choice\" — user tapped a quick-reply button; choice_id MUST come from the previous response\n  \"action\": \"select_choice\",\n  // choice_id from Step 3 response → activities[last].choices[].id\n  \"choice_id\": \"no\",\n  // Optional — the button label shown in the UI (for conversation transcript)\n  \"user_says\": \"No, issue still persists\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{base_url}}/ai-chatbot/v1/sessions/turn/{{session_id}}",
-              "host": ["{{base_url}}"],
-              "path": ["ai-chatbot", "v1", "sessions", "turn", "{{session_id}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ai-chatbot",
+                "v1",
+                "sessions",
+                "turn",
+                "{{session_id}}"
+              ]
             },
             "description": "Choosing 'no' triggers the LLM ticket path:\n1. LLM generates ticket subject + description from conversation context\n2. Zoho ticket created via API\n3. Bot confirms: '✅ Ticket #T12345 raised. L2 team will reach you within 2 business days.'\n4. Session ends with type: 'end', outcome: 'ticket_raised'\n\nExpected response shape:\n```json\n{\n  \"session_id\": \"...\",\n  \"ticket_id\": \"T12345\",       ← Zoho ticket number — show this in the UI\n  \"activities\": [\n    { \"type\": \"markdown\", \"content\": \"✅ Ticket #T12345 raised...\" },\n    { \"type\": \"end\", \"outcome\": \"ticket_raised\" }\n  ],\n  \"status\": \"ticket_raised\"\n}\n```\n\nUI must handle two terminal outcomes differently:\n- outcome: 'self_served' → show 'Issue resolved' banner\n- outcome: 'ticket_raised' → show 'Ticket #<ticket_id> raised' banner with 2-day SLA note\n\nIf Zoho API fails: outcome becomes 'ticket_failed' with a message to email support directly."
           },

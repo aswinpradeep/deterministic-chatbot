@@ -2,7 +2,9 @@
 
 **Audience:** Web / mobile frontend developers integrating the iGOT Deterministic Chatbot chat widget into the iGOT Karmayogi portal.  
 **Base URL:** Configured per environment (see §12).  
-**Auth:** Every request requires `x-authenticated-user-token: <keycloak_jwt>` — the user's live Keycloak session token.
+**Auth:** Every request requires two headers:
+- `x-authenticated-user-token: <keycloak_jwt>` — the user's live Keycloak session token
+- `Authorization: Bearer <kong_jwt>` — Kong API gateway token (required when calling through Kong in dev/UAT/prod)
 
 ---
 
@@ -66,6 +68,7 @@ GET  /ai-chatbot/v1/sessions/list     ← check if user has an active session
 | # | What you need | Details |
 |---|---------------|---------|
 | 1 | **Keycloak JWT** | The user's live portal session token. Read it from the browser cookie or `localStorage` where the iGOT portal already stores it. Send it as `x-authenticated-user-token` on every request. |
+| 2 | **Kong JWT** | API gateway token required when calling through Kong (dev/UAT/prod). Send it as `Authorization: Bearer <token>`. Not needed for local direct calls. |
 | 2 | **API base URL** | One URL, configured per environment — see §12. Local dev: `http://localhost:8000` |
 | 3 | **Markdown renderer** | Bot messages use bold, italics, bullet lists, and line breaks. Use `react-markdown` (React/Next.js), `marked` (vanilla JS), `flutter_markdown` (Flutter), or equivalent. |
 | 4 | **Session storage** | `localStorage` (web) or secure storage (mobile). You store exactly one value: the `session_id` UUID from the first API call. |
@@ -279,17 +282,23 @@ Frontend                          iGOT Deterministic Chatbot API
 ### Header
 
 ```
-x-authenticated-user-token: <value>
+x-authenticated-user-token: <keycloak_jwt>
+Authorization: Bearer <kong_jwt>
 ```
 
-This is the **only** auth header. Do not use `Authorization: Bearer`.
+Two headers are required when calling through Kong (dev / UAT / prod):
+- `x-authenticated-user-token` — Keycloak JWT identifying the user (extracted from `sub` claim)
+- `Authorization: Bearer` — Kong API gateway JWT authorizing API access
 
-### Production — Keycloak JWT
+Local dev (direct, no Kong): only `x-authenticated-user-token` is needed (any UUID when `AUTH_DISABLED=true`).
+
+### Dev / UAT — Kong + Keycloak
 
 ```bash
-curl -X POST https://igot-chatbot.example.com/ai-chatbot/v1/sessions \
+curl -X POST https://portal.dev.karmayogibharat.net/api/ai/chatbot/v1/sessions/create \
   -H "Content-Type: application/json" \
-  -H "x-authenticated-user-token: eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..." \
+  -H "x-authenticated-user-token: <keycloak-jwt>" \
+  -H "Authorization: Bearer <kong-jwt>" \
   -d '{"channel": "web", "language": "en"}'
 ```
 
