@@ -233,3 +233,80 @@ def update_current_generation(
             _client.update_current_generation(**kwargs)
     except Exception as exc:  # noqa: BLE001
         log.debug("[tracing] update_current_generation failed: %s", exc)
+
+
+def record_session_end(
+    *,
+    user_id: str,
+    session_id: str,
+    flow_id: str | None,
+    outcome: str,
+    ticket_id: str | None = None,
+    turn_count: int = 0,
+    node_path: list[str] | None = None,
+    channel: str = "web",
+    language: str = "en",
+) -> None:
+    """Create a terminal summary trace for a completed session.
+
+    Shares session_id with all turn traces so Langfuse groups them together.
+    Tags carry outcome + flow_id so you can pivot on them in dashboards:
+      - Filter "session-end" traces by tag "ticket_raised" → all sessions that raised tickets
+      - Filter by tag "CERTIFICATE_DOWNLOAD" → all cert sessions
+      - Filter by user_id → every session for that user across time
+
+    No-op when tracing is disabled.
+    """
+    if not _enabled or _client is None:
+        return
+    try:
+        from langfuse import propagate_attributes
+
+        _path_str = " → ".join(node_path) if node_path else ""
+        _tags = [channel, language, flow_id or "no_flow", outcome]
+
+        with propagate_attributes(
+            user_id=user_id,
+            session_id=session_id,
+            trace_name="session-end",
+            tags=_tags,
+            metadata={
+                "flow_id": flow_id or "",
+                "outcome": outcome,
+                "ticket_id": ticket_id or "",
+                "turn_count": str(turn_count),
+                "node_path": _path_str,
+                "channel": channel,
+                "language": language,
+            },
+        ):
+            with _client.start_as_current_observation(
+                name="session-end",
+                as_type="chain",
+                metadata={
+                    "user_id": user_id,
+                    "session_id": session_id,
+                    "flow_id": flow_id,
+                    "outcome": outcome,
+                    "ticket_id": ticket_id,
+                    "turn_count": turn_count,
+                    "node_path": _path_str,
+                    "channel": channel,
+                    "language": language,
+                },
+            ):
+                _client.set_current_trace_io(
+                    input={
+                        "flow_id": flow_id,
+                        "turn_count": turn_count,
+                        "node_path": node_path or [],
+                    },
+                    output={
+                        "outcome": outcome,
+                        "ticket_id": ticket_id,
+                        "ticket_raised": ticket_id is not None,
+                        "self_served": outcome == "self_served",
+                    },
+                )
+    except Exception as exc:  # noqa: BLE001
+        log.debug("[tracing] record_session_end failed: %s", exc)

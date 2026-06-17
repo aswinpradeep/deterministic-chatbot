@@ -126,6 +126,8 @@ async def start_session(
         "flow_id": None,
         "status": "selecting_topic",
         "ttl_minutes": ttl_minutes,
+        "turn_count": 0,
+        "node_path": [],
     }
 
     # Register in Redis so any pod/device can look up this session by user ID
@@ -140,7 +142,7 @@ async def start_session(
 
     # Greeting + topic selection — text from system_messages.yaml, menu from flow metadata
     with tracing.turn_trace(
-        user_id=user_id_hash,
+        user_id=user_id,
         session_id=str(session_id),
         trace_name="session-start",
         tags=[body.channel, body.language],
@@ -190,6 +192,8 @@ async def submit_turn(
 
     if session is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+
+    user_id = claims["sub"]
 
     # Translation service + session language (used throughout this handler)
     translation_svc = getattr(request.app.state, "services", {}).get("translation")
@@ -264,22 +268,25 @@ async def submit_turn(
         state_dict = state.model_dump(mode="json")
         state_dict["flow_id"] = flow_id
 
+        session["turn_count"] = session.get("turn_count", 0) + 1
         lg_config = {"configurable": {"thread_id": sid}}
         try:
             with tracing.turn_trace(
-                user_id=user_id_hash,
+                user_id=user_id,
                 session_id=sid,
                 trace_name=f"flow-start-{flow_id}",
                 tags=[session["channel"], session["language"], flow_id],
                 flow_id=flow_id,
                 channel=session["channel"],
                 action="topic_selected",
+                user_choice=flow_id,
+                turn_count=session["turn_count"],
             ):
-                tracing.set_trace_io(input={"flow_id": flow_id, "action": "topic_selected"})
+                tracing.set_trace_io(input={"flow_id": flow_id, "action": "topic_selected", "user_choice": flow_id})
                 result = await graph.ainvoke(state_dict, lg_config)
                 result_status = result.get("status", "active")
                 tracing.set_trace_io(
-                    input={"flow_id": flow_id, "action": "topic_selected"},
+                    input={"flow_id": flow_id, "action": "topic_selected", "user_choice": flow_id},
                     output={"status": result_status, "node": result.get("current_node")},
                 )
         except Exception as exc:  # noqa: BLE001
@@ -289,6 +296,11 @@ async def submit_turn(
         activities = result.get("pending_activities") or []
         activities = await _translate_activities(activities, lang, translation_svc)
         result_status = result.get("status", "active")
+
+        # Track node progression for this session
+        _next_node = result.get("current_node")
+        if _next_node:
+            session.setdefault("node_path", []).append(_next_node)
 
         session["flow_id"] = flow_id
         session["status"] = "in_flow" if result_status not in _TERMINAL_STATUSES else "done"
@@ -301,10 +313,21 @@ async def submit_turn(
                 await _store.refresh(session["user_id_hash"], session["ttl_minutes"])
 
         if result_status in _TERMINAL_STATUSES:
+            _ticket_id = result.get("zoho_ticket_id")
             log.info(
                 "[activity] event=flow_ended  session=%s  user=%s  flow=%s  outcome=%s  ticket=%s",
-                sid, user_id_hash, flow_id, result_status,
-                result.get("zoho_ticket_id") or "-",
+                sid, user_id_hash, flow_id, result_status, _ticket_id or "-",
+            )
+            tracing.record_session_end(
+                user_id=user_id,
+                session_id=sid,
+                flow_id=flow_id,
+                outcome=result_status,
+                ticket_id=_ticket_id,
+                turn_count=session.get("turn_count", 0),
+                node_path=session.get("node_path", []),
+                channel=session.get("channel", "web"),
+                language=session.get("language", "en"),
             )
 
         # Append user action + bot response to persistent conversation history
@@ -408,20 +431,32 @@ async def submit_turn(
     # Build state update from user action (collected fields + message history)
     update = _build_state_update(body, current_state_values, flow_yaml)
 
+    # Safe label for Langfuse — never log free text (PII); use structured fields only
+    _user_choice = (
+        body.user_says                                              # frontend label e.g. "Certificate issue"
+        or body.item_label                                          # picker selection e.g. "Foundation Course on AI"
+        or (body.choice_id if body.action == "select_choice" else None)  # internal id fallback
+        or body.action                                              # action type as last resort
+    )
+    session["turn_count"] = session.get("turn_count", 0) + 1
+
     try:
         with tracing.turn_trace(
-            user_id=session["user_id_hash"],
+            user_id=user_id,
             session_id=sid,
             trace_name=f"turn-{flow_id}",
             tags=[session.get("channel", "web"), session.get("language", "en"), flow_id],
             flow_id=flow_id,
             action=body.action,
             node=current_state_values.get("current_node", ""),
+            user_choice=_user_choice,
+            turn_count=session["turn_count"],
         ):
             tracing.set_trace_io(
                 input={
                     "action": body.action,
                     "node": current_state_values.get("current_node"),
+                    "user_choice": _user_choice,
                     **({f"choice_id": body.choice_id} if body.choice_id else {}),
                 }
             )
@@ -432,6 +467,7 @@ async def submit_turn(
                 input={
                     "action": body.action,
                     "node": current_state_values.get("current_node"),
+                    "user_choice": _user_choice,
                     **({f"choice_id": body.choice_id} if body.choice_id else {}),
                 },
                 output={
@@ -449,13 +485,29 @@ async def submit_turn(
     activities = await _translate_activities(activities, lang, translation_svc)
     result_status = result.get("status", "active")
 
+    # Track node progression
+    _next_node = result.get("current_node")
+    if _next_node:
+        session.setdefault("node_path", []).append(_next_node)
+
     _store = getattr(request.app.state, "session_store", None)
     if result_status in _TERMINAL_STATUSES:
         session["status"] = "done"
+        _ticket_id = result.get("zoho_ticket_id")
         log.info(
             "[activity] event=flow_ended  session=%s  user=%s  flow=%s  outcome=%s  ticket=%s",
-            sid, session["user_id_hash"], flow_id, result_status,
-            result.get("zoho_ticket_id") or "-",
+            sid, session["user_id_hash"], flow_id, result_status, _ticket_id or "-",
+        )
+        tracing.record_session_end(
+            user_id=user_id,
+            session_id=sid,
+            flow_id=flow_id,
+            outcome=result_status,
+            ticket_id=_ticket_id,
+            turn_count=session.get("turn_count", 0),
+            node_path=session.get("node_path", []),
+            channel=session.get("channel", "web"),
+            language=session.get("language", "en"),
         )
         if _store:
             await _store.delete(session["user_id_hash"])
