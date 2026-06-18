@@ -25,7 +25,7 @@
 #   [GAP-2] Multiple-results eligibility loop (SOP §10): only the top result is
 #           fully processed; user can retry with a refined name.
 #   [GAP-3] Course/event hyperlink URL pattern not confirmed by API team.
-#           Placeholder: https://portal.karmayogibharat.net/app/toc/{id}/overview
+#           Placeholder: https://portal.uat.karmayogibharat.net/app/toc/{id}/overview
 #   [GAP-4] RESOLVED: Access Settings API userGroups criteria are now compared against
 #           the user's profileDetails.professionalDetails via the check_user_eligibility
 #           transform (criteriaKey "group", "designation", etc. matched field-by-field).
@@ -254,7 +254,7 @@ nodes:
       text: |
         Upon checking, we found the requested course on the platform.
 
-        📘 **Course Name:** [{{ ctx.collected.course_name_found }}](https://portal.karmayogibharat.net/app/toc/{{ ctx.collected.course_id }}/overview)
+        📘 **Course Name:** [{{ ctx.collected.course_name_found }}](https://portal.uat.karmayogibharat.net/app/toc/{{ ctx.collected.course_id }}/overview)
 
         Kindly use the above link to navigate to the course and proceed with enrollment.
     steps: []
@@ -305,7 +305,7 @@ nodes:
 
         Kindly refer to the eligible course below and proceed with enrollment:
 
-        📘 **Course Name:** [{{ ctx.collected.course_name_found }}](https://portal.karmayogibharat.net/app/toc/{{ ctx.collected.course_id }}/overview)
+        📘 **Course Name:** [{{ ctx.collected.course_name_found }}](https://portal.uat.karmayogibharat.net/app/toc/{{ ctx.collected.course_id }}/overview)
 
         If this is not the course you are looking for, please search again with a more specific name.
     steps: []
@@ -569,7 +569,7 @@ nodes:
       text: |
         Upon checking, we found the requested event on the platform.
 
-        📅 **Event Name:** [{{ ctx.collected.event_name_found }}](https://portal.karmayogibharat.net/app/toc/{{ ctx.collected.event_id }}/overview)
+        📅 **Event Name:** [{{ ctx.collected.event_name_found }}](https://portal.uat.karmayogibharat.net/app/toc/{{ ctx.collected.event_id }}/overview)
 
         Kindly use the above link to access the event and proceed accordingly.
     steps: []
