@@ -213,6 +213,11 @@ class ApiCallNode(NodeHandler):
                             value = transform_fn(value)
                 updates[dst_path] = value
 
+            # Clear any stale error from a previous api_call so that this
+            # node's on_success edge is taken correctly (not the on_error path
+            # left over from an earlier timeout/error in the same conversation).
+            updates["_last_api_error"] = ""
+
             return {
                 "current_node": cfg["id"],
                 "collected": {**state.collected, **updates},
@@ -317,12 +322,20 @@ def _render_value(value: Any, ctx: dict[str, Any], extra_vars: dict[str, Any] | 
     Uses `render_native` for string values so that collected fields containing
     lists or dicts (e.g. `incomplete_ids`) are passed as proper JSON types in
     request bodies rather than being coerced to their string representation.
+
+    Dict keys containing Jinja expressions (``{{ ... }}``) are also rendered,
+    enabling dynamic filter keys such as:
+        ``"{{ 'email' if ctx.collected.update_type == 'EMAIL' else 'phone' }}": "value"``
     """
     if isinstance(value, str):
         from app.engine.template import render_native
         return render_native(value, ctx, extra_vars=extra_vars)
     if isinstance(value, dict):
-        return {k: _render_value(v, ctx, extra_vars=extra_vars) for k, v in value.items()}
+        return {
+            render(k, ctx, extra_vars=extra_vars) if isinstance(k, str) and '{{' in k else k:
+            _render_value(v, ctx, extra_vars=extra_vars)
+            for k, v in value.items()
+        }
     if isinstance(value, list):
         return [_render_value(v, ctx, extra_vars=extra_vars) for v in value]
     return value
@@ -497,6 +510,54 @@ _ENROLLMENT_STATUS_MAP: dict[str, int] = {
     "Completed":    2,
     "completed":    2,
 }
+
+
+# ---------------------------------------------------------------------------
+# Enrollment count transforms — used by multiple_account flow to summarise
+# the courses list into simple integer counts for display.
+# ---------------------------------------------------------------------------
+
+def _count_courses_total(courses: Any) -> int:
+    """Return the total number of In-Progress + Completed courses.
+
+    Only counts courses with status 1 (In-Progress) or 2 (Completed) so that
+    total always equals in_progress + completed, regardless of what the API returns.
+    """
+    if not isinstance(courses, list):
+        return 0
+    count = 0
+    for course in courses:
+        if isinstance(course, dict):
+            status = _enrollment_status_to_int(course.get("status"))
+            if status in (1, 2):
+                count += 1
+    return count
+
+
+def _count_courses_inprogress(courses: Any) -> int:
+    """Count courses with status == 1 (In-Progress) from the enrollment list."""
+    if not isinstance(courses, list):
+        return 0
+    count = 0
+    for course in courses:
+        if isinstance(course, dict):
+            status = _enrollment_status_to_int(course.get("status"))
+            if status == 1:
+                count += 1
+    return count
+
+
+def _count_courses_completed(courses: Any) -> int:
+    """Count courses with status == 2 (Completed) from the enrollment list."""
+    if not isinstance(courses, list):
+        return 0
+    count = 0
+    for course in courses:
+        if isinstance(course, dict):
+            status = _enrollment_status_to_int(course.get("status"))
+            if status == 2:
+                count += 1
+    return count
 
 
 def _enrollment_status_to_int(status: Any) -> int:
@@ -879,6 +940,9 @@ _TRANSFORMS: dict[str, Any] = {
     "detect_scorm":                _detect_scorm,
     "unix_ms_to_iso":              _unix_ms_to_iso,
     "enrollment_status_to_int":    _enrollment_status_to_int,
+    "count_courses_total":         _count_courses_total,
+    "count_courses_inprogress":    _count_courses_inprogress,
+    "count_courses_completed":     _count_courses_completed,
     "extract_child_course_ids":    _extract_child_course_ids,
     # Weekly Clap — Insights API week date-range labels
     "week_label_w1": _week_label_w1,
