@@ -1004,6 +1004,28 @@ def _check_secure_settings_eligibility(secure_settings: Any, user_eligibility_ct
     return all_passed
 
 
+def _has_issued_certificates(issued_certificates: Any) -> bool:
+    """Return True if the enrollment's issuedCertificates list contains at least one entry.
+
+    The Karmayogi enrollment list API returns ``issuedCertificates`` as a list of
+    certificate objects (each with identifier, lastIssuedOn, name, token, version).
+    An empty list or null means no certificate has been generated yet.
+
+    Used as a response_mapping transform on
+    ``$.result.enrollments[0].issuedCertificates``  →  collected.certificate_issued
+
+    Returns:
+        True  – certificate has been generated (list is non-empty)
+        False – not yet generated (None / empty list / unexpected type)
+    """
+    if not issued_certificates:
+        return False
+    if isinstance(issued_certificates, list):
+        return len(issued_certificates) > 0
+    # Defensive: treat any truthy scalar as "issued" (handles legacy bool/string)
+    return bool(issued_certificates)
+
+
 # Registry of named transforms usable in YAML response_mapping `transform:` field.
 _TRANSFORMS: dict[str, Any] = {
     "extract_incomplete_ids":      _extract_incomplete_ids,
@@ -1021,6 +1043,10 @@ _TRANSFORMS: dict[str, Any] = {
     "count_courses_inprogress":    _count_courses_inprogress,
     "count_courses_completed":     _count_courses_completed,
     "extract_child_course_ids":    _extract_child_course_ids,
+    # Certificate check — converts issuedCertificates list → bool
+    # True  = non-empty list (certificate generated)
+    # False = null / empty list (not yet generated)
+    "has_issued_certificates":     _has_issued_certificates,
     # Weekly Clap — Insights API week date-range labels
     "week_label_w1": _week_label_w1,
     "week_label_w2": _week_label_w2,
@@ -1040,6 +1066,7 @@ _TRANSFORMS: dict[str, Any] = {
     # Checks organisation list + isVerifiedKarmayogi flag against user profile
     "check_secure_settings_eligibility": _check_secure_settings_eligibility,  # (secureSettings, user_eligibility_ctx) → bool
 }
+
 
 
 def _jsonpath_get(data: Any, path: str) -> Any:
