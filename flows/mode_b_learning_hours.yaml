@@ -410,7 +410,6 @@ nodes:
       - { from: "$.response.channel",                                            to: collected.org_channel }
       - { from: "$.response.organisations[0].orgName",                           to: collected.org_name }
       - { from: "$.response.profileDetails.verifiedKarmayogi",                   to: collected.profile_verified }
-      - { from: "$.response.profileDetails.profileStatus",                       to: collected.profile_status }
       - { from: "$.response.profileDetails.professionalDetails[0].designation",  to: collected.user_designation }
       - { from: "$.response.profileDetails.professionalDetails[0].group",        to: collected.user_group }
       - { from: "$.response.profileDetails.cadreDetails",                        to: collected.cadre_details }
@@ -453,7 +452,7 @@ nodes:
       - { id: NO,  label: "❌ No, details are incorrect" }
     disable_input: true
     on_reply:
-      YES: sp_fetch_cbp_plan
+      YES: sp_fetch_assigned_courses
       NO:  sp_ask_incorrect_detail
 
   # Step 5.1 — Incorrect details: identify which one
@@ -514,8 +513,31 @@ nodes:
         Thank you for reaching out! 🙏
     next: satisfied
 
-  # Step 4.2 — Verify APAR/CAP assignment (CBP Plan API)
-  # API: GET /api/supportportal/cbplan/v2/admin/user/list/{userId}
+  # Step 4.2a — Assigned Courses API: check if any courses are assigned to the user
+  - id: sp_fetch_assigned_courses
+    type: api_call
+    integration: karmayogi
+    request:
+      method: GET
+      url: "/api/supportportal/admin/user/v2/assignedcourses/{{ ctx.collected.fetched_user_id }}"
+    response_mapping:
+      - { from: "$.result.content", to: collected.assigned_courses }
+    on_success: sp_branch_assigned_courses
+    on_error:
+      any: lookup_mdo_admin
+    timeout_ms: 8000
+
+  # Branch: courses assigned → proceed to APAR check; empty → MDO lookup (Step 4.3)
+  - id: sp_branch_assigned_courses
+    type: branch
+    rules:
+      - if: >
+          ctx.collected.assigned_courses != None and
+          len(ctx.collected.assigned_courses) > 0
+        then: sp_fetch_cbp_plan
+    default: lookup_mdo_admin
+
+  # Step 4.2b — Verify APAR/CAP assignment (CBP Plan API)
   - id: sp_fetch_cbp_plan
     type: api_call
     integration: karmayogi
@@ -542,7 +564,6 @@ nodes:
     default: lookup_mdo_admin
 
   # Step 4.5 — APAR/CAP Assigned — check enrollment for course completion
-  # API: POST /api/course/private/v4/user/enrollment/list/{userId}
   - id: sp_fetch_enrollment
     type: api_call
     integration: karmayogi
