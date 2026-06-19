@@ -36,25 +36,22 @@ COPY pyproject.toml ./
 # uv.lock is optional on first run; generate with `uv lock` and commit it
 COPY uv.lock* ./
 
+COPY README.md .
+
 # Install production deps into .venv
 # --frozen       : use exact lock file if present (recommended for CI / prod)
 # --no-dev       : skip test / lint tooling
 # --no-install-project : install deps only; project itself is installed next
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --no-dev --no-install-project 2>/dev/null || true && \
-    ([ -f uv.lock ] && uv sync --frozen --no-dev --no-install-project || uv sync --no-dev --no-install-project)
+RUN ([ -f uv.lock ] && uv sync --frozen --no-dev --no-install-project || uv sync --no-dev --no-install-project)
 
 # Copy application source and install the project package
+COPY README.md     ./
 COPY app/          ./app/
 COPY flows/        ./flows/
 COPY prompts/      ./prompts/
 COPY integrations/ ./integrations/
 COPY dev_ui/       ./dev_ui/
-COPY alembic/      ./alembic/
-COPY alembic.ini*  ./
-
-RUN --mount=type=cache,target=/root/.cache/uv \
-    ([ -f uv.lock ] && uv sync --frozen --no-dev || uv sync --no-dev)
+RUN ([ -f uv.lock ] && uv sync --frozen --no-dev || uv sync --no-dev)
 
 # ── Stage 2: lean runtime image ────────────────────────────────────────────────
 FROM python:3.12-slim AS runtime
@@ -74,6 +71,11 @@ RUN groupadd -r igot && useradd -r -g igot -d /app -s /sbin/nologin igot
 
 WORKDIR /app
 
+# Pre-create writable dirs with correct ownership
+# logs/ — only needed if LOG_FILE is set; in Kubernetes leave LOG_FILE unset
+#          and let stdout/stderr be captured by the cluster logging stack instead.
+RUN mkdir -p /app/logs && chown igot:igot /app/logs
+
 # Copy venv and source from builder
 COPY --from=builder --chown=igot:igot /build/.venv       ./.venv
 COPY --from=builder --chown=igot:igot /build/app/        ./app/
@@ -81,8 +83,6 @@ COPY --from=builder --chown=igot:igot /build/flows/      ./flows/
 COPY --from=builder --chown=igot:igot /build/prompts/    ./prompts/
 COPY --from=builder --chown=igot:igot /build/integrations/ ./integrations/
 COPY --from=builder --chown=igot:igot /build/dev_ui/     ./dev_ui/
-COPY --from=builder --chown=igot:igot /build/alembic/    ./alembic/
-COPY --from=builder --chown=igot:igot /build/alembic.ini* ./
 
 # Entrypoint script (DB migrations + server start)
 COPY --chown=igot:igot entrypoint.sh ./
@@ -102,10 +102,10 @@ EXPOSE 8000
 HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=3 \
     CMD curl -sf http://localhost:8000/health || exit 1
 
-ENTRYPOINT ["./entrypoint.sh"]
-CMD ["uvicorn", "app.main:app", \
+ENTRYPOINT ["/app/entrypoint.sh"]
+CMD ["/app/.venv/bin/python", "-m", "uvicorn", "app.main:app", \
      "--host", "0.0.0.0", \
      "--port", "8000", \
-     "--workers", "2", \
+     "--workers", "1", \
      "--log-level", "info", \
      "--no-access-log"]
