@@ -25,11 +25,15 @@ GET  /ai-chatbot/v1/sessions/list     ← check if user has an active session
     │                      │                         last role:bot entry = current prompt
     │                      │
     │                      └─ messages[] empty     → POST /ai-chatbot/v1/sessions/create
-    │                                                (equivalent: user hadn't picked a topic yet)
+    │                                                (equivalent: user hadn't picked a category yet)
     │
     └─ no session   → POST /ai-chatbot/v1/sessions/create        ← start fresh
                             ↓
-              POST /ai-chatbot/v1/sessions/turn/{id}       ← one call per user action
+              POST /ai-chatbot/v1/sessions/turn/{id}   ← user picks a category (5 buttons)
+                            ↓
+              POST /ai-chatbot/v1/sessions/turn/{id}   ← user picks a flow within the category
+                            ↓
+              POST /ai-chatbot/v1/sessions/turn/{id}   ← one call per subsequent user action
               (repeat until response contains type:"end")
 ```
 
@@ -254,9 +258,13 @@ Frontend                          iGOT Deterministic Chatbot API
    |                                  |
    |  POST /ai-chatbot/v1/sessions/create             |  ← start a new session
    |  ─────────────────────────────→  |
-   |  ←─────────────────────────────  |  → [markdown greeting, quick_replies (12 topics)]
+   |  ←─────────────────────────────  |  → [markdown greeting, quick_replies (5 categories)]
    |                                  |
-   |  POST /ai-chatbot/v1/sessions/turn/{id}   |  ← user picks topic
+   |  POST /ai-chatbot/v1/sessions/turn/{id}   |  ← user picks a category
+   |  ─────────────────────────────→  |
+   |  ←─────────────────────────────  |  → [markdown, quick_replies (flows in that category)]
+   |                                  |
+   |  POST /ai-chatbot/v1/sessions/turn/{id}   |  ← user picks a flow
    |  ─────────────────────────────→  |
    |  ←─────────────────────────────  |  → [markdown, quick_replies] or [picker] or [input]
    |                                  |
@@ -347,7 +355,7 @@ POST /ai-chatbot/v1/sessions/create
 | Field | Type | Description |
 |-------|------|-------------|
 | `session_id` | UUID | **Save this immediately to localStorage** — all subsequent turns use it |
-| `activities` | array | Greeting message + topic picker (12 quick-reply buttons) |
+| `activities` | array | Greeting message + category picker (5 quick-reply buttons) |
 | `status` | string | Always `"awaiting_user"` on session start |
 | `flow_id` | null | No flow selected yet |
 | `current_node` | null | No flow running yet |
@@ -370,18 +378,11 @@ curl -s -X POST http://localhost:8000/ai-chatbot/v1/sessions/create \
     {
       "type": "quick_replies",
       "choices": [
-        { "id": "CERTIFICATE_DOWNLOAD",            "label": "🎓 Certificate issue" },
-        { "id": "ACCESS_REVOKED",                  "label": "🔒 Access revoked" },
-        { "id": "COURSE_PROGRESS_ISSUE",           "label": "📊 Course progress issue" },
-        { "id": "RESOURCE_NOT_OPENING",            "label": "📂 Resource not opening" },
-        { "id": "FEEDBACK_RATING_ISSUE",           "label": "📝 Feedback / Rating issue" },
-        { "id": "PROFILE_VERIFICATION_DESIGNATION","label": "✅ Designation / Group not verified" },
-        { "id": "LEADERBOARD_ISSUE",               "label": "🏆 Leaderboard issue" },
-        { "id": "BULK_PROFILE_UPDATE",             "label": "📋 Bulk profile update" },
-        { "id": "UNENROLL_REQUEST",                "label": "🚫 Unenroll from a course/program/event" },
-        { "id": "WEEKLY_CLAP_ISSUE",               "label": "👏 Weekly clap not updated / reset" },
-        { "id": "DOWNLOAD_REPORT_ISSUE",           "label": "📑 Unable to download report" },
-        { "id": "KARMA_POINTS_ISSUE",              "label": "⭐ Karma points issue" }
+        { "id": "__cat__Profile & User Management",          "label": "Profile & User Management" },
+        { "id": "__cat__Content Related Issue",              "label": "Content Related Issue" },
+        { "id": "__cat__CA/APAR Issue",                      "label": "CA/APAR Issue" },
+        { "id": "__cat__Recognition & Engagement",           "label": "Recognition & Engagement" },
+        { "id": "__cat__Application Crashing / Not Loading", "label": "Application Crashing / Not Loading" }
       ],
       "disable_input": true
     }
@@ -393,7 +394,7 @@ curl -s -X POST http://localhost:8000/ai-chatbot/v1/sessions/create \
 }
 ```
 
-> **Frontend:** Save `session_id` to localStorage immediately. Use `GET /sessions/list` on next app open to resume. Hide the free-text input box when `disable_input: true` — the user must pick a button.
+> **Frontend:** Save `session_id` to localStorage immediately. The first `quick_replies` shows **5 top-level categories** — `choice_id` values start with `__cat__`. On selection, the server returns the sub-flows for that category. Only in that second `quick_replies` will `choice_id` be a flow ID (e.g. `CERTIFICATE_DOWNLOAD`). Hide the free-text input box when `disable_input: true` — the user must pick a button.
 
 ---
 
@@ -463,7 +464,8 @@ curl -s -X POST http://localhost:8000/ai-chatbot/v1/sessions/turn/550e8400... \
 ```
 
 **Edge cases:**
-- Sending an unknown `choice_id` at the **topic selection** phase → server re-shows the menu with an error message (no error status, HTTP 200)
+- Sending an unknown `choice_id` at the **category selection** phase → server re-shows the 5 category buttons with an error message (HTTP 200)
+- Sending an unknown `choice_id` at the **flow selection** phase (after picking a category) → server re-shows only the sub-flows for the already-selected category (HTTP 200)
 - Sending an unknown `choice_id` inside an active flow → behaviour depends on the node; usually re-prompts
 
 ---
@@ -833,6 +835,15 @@ Every turn response (both `StartSessionResponse` and `TurnResponse`) shares thes
 | `ended` | Flow ended — generic | Show neutral banner |
 | `error` | Something went wrong | Show error state with retry option |
 
+**Internal session statuses** (returned by `GET /sessions/list`, not in turn responses):
+
+| `status` | Meaning |
+|----------|---------|
+| `selecting_category` | User is on the top-level category menu |
+| `selecting_topic` | User has picked a category and is on the sub-flow menu |
+| `in_flow` | A flow is actively running |
+| `done` | Session has ended |
+
 ---
 
 ## 7. Error Responses
@@ -891,30 +902,26 @@ curl -s -X POST http://localhost:8000/ai-chatbot/v1/sessions/turn/nonexistent-uu
 
 ## 8. Edge Cases and Guardrails
 
-### Unknown topic at menu
+### Unknown selection at category or flow menu
 
-If the user sends a `choice_id` that doesn't match any active flow:
+The menu is two-level. Invalid selections are handled per level:
 
+**Invalid category** (session is at `selecting_category` phase):
 ```bash
 curl -s -X POST http://localhost:8000/ai-chatbot/v1/sessions/turn/$SID \
   -H "Content-Type: application/json" \
   -H "x-authenticated-user-token: 00000000-0000-0000-0000-000000000001" \
-  -d '{"action": "select_choice", "choice_id": "INVALID_FLOW"}'
+  -d '{"action": "select_choice", "choice_id": "BOGUS"}'
 ```
+Response: 5 category buttons re-shown.
 
-Response (HTTP 200 — not an error):
-```json
-{
-  "activities": [
-    { "type": "markdown", "content": "🤔 I didn't catch that — please choose one of the options below." },
-    { "type": "quick_replies", "choices": [...menu again...], "disable_input": true }
-  ],
-  "status": "awaiting_user",
-  "flow_id": null
-}
+**Invalid flow** (session is at `selecting_topic` phase, user already picked a category):
+```bash
+-d '{"action": "select_choice", "choice_id": "BOGUS_FLOW"}'
 ```
+Response: only the sub-flows for the already-selected category are re-shown — not all 16 flows, not the top categories.
 
-The menu is re-shown. Do not treat this as an error.
+Both cases return HTTP 200 — not an error. Do not treat as an error.
 
 ### Validation failure on text input
 
@@ -1147,11 +1154,46 @@ curl -s -X POST http://localhost:8000/ai-chatbot/v1/sessions/create \
 ```
 
 📋 **Copy:** `session_id` → use it as `{session_id}` in every subsequent request.  
-👀 **Look at:** `quick_replies.choices[].id` — these are the valid `choice_id` values for Step 2.
+👀 **Look at:** `quick_replies.choices[].id` — these are the 5 category buttons. Step 2 picks one.
 
 ---
 
-#### Step 2 — Select topic: CERTIFICATE_DOWNLOAD
+#### Step 2 — Select category: Content Related Issue
+
+```bash
+curl -s -X POST http://localhost:8000/ai-chatbot/v1/sessions/turn/550e8400-e29b-41d4-a716-446655440000 \
+  -H "Content-Type: application/json" \
+  -H "x-authenticated-user-token: 00000000-0000-0000-0000-000000000001" \
+  -d '{"action": "select_choice", "choice_id": "__cat__Content Related Issue"}'
+```
+
+**Response:**
+```json
+{
+  "session_id": "550e8400-e29b-41d4-a716-446655440000",
+  "status": "awaiting_user",
+  "flow_id": null,
+  "current_node": null,
+  "activities": [
+    { "type": "markdown", "content": "Please choose the specific issue you're facing:" },
+    { "type": "quick_replies", "disable_input": true, "choices": [
+        { "id": "CERTIFICATE_DOWNLOAD",  "label": "🎓 Certificate issue" },
+        { "id": "COURSE_PROGRESS_ISSUE", "label": "📊 Course progress issue" },
+        { "id": "RESOURCE_NOT_OPENING",  "label": "📂 Resource not opening" },
+        { "id": "FEEDBACK_RATING_ISSUE", "label": "📝 Feedback / Rating issue" },
+        { "id": "FIND_COURSE",           "label": "🔍 Can't find a course or event" },
+        { "id": "UNENROLL_REQUEST",      "label": "🚫 Unenroll from a course/program/event" }
+      ]
+    }
+  ]
+}
+```
+
+👀 **Look at:** sub-flow `choices[].id` — these are now flow IDs. Step 3 picks one.
+
+---
+
+#### Step 3 — Select flow: CERTIFICATE_DOWNLOAD
 
 ```bash
 curl -s -X POST http://localhost:8000/ai-chatbot/v1/sessions/turn/550e8400-e29b-41d4-a716-446655440000 \
@@ -1178,11 +1220,11 @@ curl -s -X POST http://localhost:8000/ai-chatbot/v1/sessions/turn/550e8400-e29b-
 }
 ```
 
-👀 **Look at:** the new `quick_replies.choices[].id` values — pass one as `choice_id` in Step 3.
+👀 **Look at:** the new `quick_replies.choices[].id` values — pass one as `choice_id` in Step 4.
 
 ---
 
-#### Step 3 — Pick certificate type: course
+#### Step 4 — Pick certificate type: course
 
 ```bash
 curl -s -X POST http://localhost:8000/ai-chatbot/v1/sessions/turn/550e8400-e29b-41d4-a716-446655440000 \
@@ -1211,11 +1253,11 @@ curl -s -X POST http://localhost:8000/ai-chatbot/v1/sessions/turn/550e8400-e29b-
 }
 ```
 
-📋 **Copy from `items[]`:** the `id` and `label` of the course you want to select → use them in Step 4.
+📋 **Copy from `items[]`:** the `id` and `label` of the course you want to select → use them in Step 5.
 
 ---
 
-#### Step 4 — Pick a course from the picker
+#### Step 5 — Pick a course from the picker
 
 ```bash
 curl -s -X POST http://localhost:8000/ai-chatbot/v1/sessions/turn/550e8400-e29b-41d4-a716-446655440000 \
@@ -1245,11 +1287,11 @@ curl -s -X POST http://localhost:8000/ai-chatbot/v1/sessions/turn/550e8400-e29b-
 }
 ```
 
-👀 **Look at:** the two `choice_id` options. Pick `yes_resolved` (Step 5a) or `no_still_issue` (Step 5b).
+👀 **Look at:** the two `choice_id` options. Pick `yes_resolved` (Step 6a) or `no_still_issue` (Step 6b).
 
 ---
 
-#### Step 5 — Confirm resolved
+#### Step 6 — Confirm resolved
 
 ```bash
 curl -s -X POST http://localhost:8000/ai-chatbot/v1/sessions/turn/550e8400-e29b-41d4-a716-446655440000 \
@@ -1290,7 +1332,20 @@ curl -s -X POST http://localhost:8000/ai-chatbot/v1/sessions/create \
 
 ---
 
-#### Step 2 — Select topic: ACCESS_REVOKED
+#### Step 2 — Select category: Profile & User Management
+
+```bash
+curl -s -X POST http://localhost:8000/ai-chatbot/v1/sessions/turn/{session_id} \
+  -H "Content-Type: application/json" \
+  -H "x-authenticated-user-token: 00000000-0000-0000-0000-000000000001" \
+  -d '{"action": "select_choice", "choice_id": "__cat__Profile & User Management"}'
+```
+
+**Response:** sub-flow menu with Access revoked, Profile verification, etc.
+
+---
+
+#### Step 3 — Select flow: ACCESS_REVOKED
 
 ```bash
 curl -s -X POST http://localhost:8000/ai-chatbot/v1/sessions/turn/{session_id} \
@@ -1316,11 +1371,11 @@ curl -s -X POST http://localhost:8000/ai-chatbot/v1/sessions/turn/{session_id} \
 }
 ```
 
-👀 **Look at:** `quick_replies.choices[].id` — pick the relevant role for Step 3.
+👀 **Look at:** `quick_replies.choices[].id` — pick the relevant role for Step 4.
 
 ---
 
-#### Step 3 — Select role
+#### Step 4 — Select role
 
 ```bash
 curl -s -X POST http://localhost:8000/ai-chatbot/v1/sessions/turn/{session_id} \
@@ -1361,33 +1416,32 @@ curl -s -X POST http://localhost:8000/ai-chatbot/v1/sessions/create \
 
 ---
 
-#### Step 2 — Send a garbage choice_id
+#### Step 2 — Send a garbage choice_id (category phase)
 
 ```bash
 curl -s -X POST http://localhost:8000/ai-chatbot/v1/sessions/turn/{session_id} \
   -H "Content-Type: application/json" \
   -H "x-authenticated-user-token: 00000000-0000-0000-0000-000000000001" \
-  -d '{"action": "select_choice", "choice_id": "BOGUS_FLOW_ID"}'
+  -d '{"action": "select_choice", "choice_id": "BOGUS"}'
 ```
 
-**Response (HTTP 200 — not an error):**
-```json
-{
-  "status": "awaiting_user",
-  "flow_id": null,
-  "current_node": null,
-  "activities": [
-    { "type": "markdown", "content": "🤔 I didn't catch that — please choose one of the options below." },
-    { "type": "quick_replies", "disable_input": true, "choices": [
-        { "id": "CERTIFICATE_DOWNLOAD", "label": "🎓 Certificate issue" },
-        { "id": "ACCESS_REVOKED",        "label": "🔒 Access revoked" }
-      ]
-    }
-  ]
-}
+**Response (HTTP 200 — not an error):** 5 category buttons re-shown.
+
+---
+
+#### Step 3 — Pick a valid category, then send a garbage flow choice_id
+
+```bash
+# First pick a category
+curl ... -d '{"action": "select_choice", "choice_id": "__cat__CA/APAR Issue"}'
+
+# Then send a bad flow id
+curl ... -d '{"action": "select_choice", "choice_id": "BOGUS_FLOW"}'
 ```
 
-The server re-shows the full topic menu. **Do not treat this as an error** — just re-render the menu.
+**Response:** Only the CA/APAR Issue sub-flows are re-shown (not all flows, not top categories).
+
+**Do not treat either case as an error** — just re-render what the server returns.
 
 ---
 
@@ -1449,13 +1503,20 @@ curl -s -X POST http://localhost:8000/ai-chatbot/v1/sessions/create \
 
 ---
 
-#### Step 2 — Select BULK_PROFILE_UPDATE (flow that asks for email)
+#### Step 2 — Select category, then a flow that asks for email (e.g. COURSE_PROGRESS_ISSUE)
 
 ```bash
+# Pick category
 curl -s -X POST http://localhost:8000/ai-chatbot/v1/sessions/turn/{session_id} \
   -H "Content-Type: application/json" \
   -H "x-authenticated-user-token: 00000000-0000-0000-0000-000000000001" \
-  -d '{"action": "select_choice", "choice_id": "BULK_PROFILE_UPDATE"}'
+  -d '{"action": "select_choice", "choice_id": "__cat__Content Related Issue"}'
+
+# Pick flow
+curl -s -X POST http://localhost:8000/ai-chatbot/v1/sessions/turn/{session_id} \
+  -H "Content-Type: application/json" \
+  -H "x-authenticated-user-token: 00000000-0000-0000-0000-000000000001" \
+  -d '{"action": "select_choice", "choice_id": "COURSE_PROGRESS_ISSUE"}'
 ```
 
 **Response:**
@@ -1652,7 +1713,7 @@ curl http://localhost:8000/health
 
 `POST /ai-chatbot/v1/sessions/create`
 
-**What it does:** Creates a conversation, saves it in Redis, and returns the greeting message + topic menu (12 buttons).
+**What it does:** Creates a conversation, saves it in Redis, and returns the greeting message + category menu (5 buttons). The user must first pick a category, then pick the specific flow from the sub-menu shown in the next turn.
 
 **When to call:** On app/page open when no active session exists, or when the user taps "Start over".
 
@@ -1712,8 +1773,11 @@ curl -X POST https://portal.dev.karmayogibharat.net/apis/proxies/v8/ai/chatbot/v
     {
       "type": "quick_replies",
       "choices": [
-        { "id": "CERTIFICATE_DOWNLOAD",  "label": "🎓 Certificate issue" },
-        { "id": "COURSE_PROGRESS_ISSUE", "label": "📊 Course progress issue" }
+        { "id": "__cat__Profile & User Management",          "label": "Profile & User Management" },
+        { "id": "__cat__Content Related Issue",              "label": "Content Related Issue" },
+        { "id": "__cat__CA/APAR Issue",                      "label": "CA/APAR Issue" },
+        { "id": "__cat__Recognition & Engagement",           "label": "Recognition & Engagement" },
+        { "id": "__cat__Application Crashing / Not Loading", "label": "Application Crashing / Not Loading" }
       ],
       "disable_input": true
     }
@@ -1725,7 +1789,7 @@ curl -X POST https://portal.dev.karmayogibharat.net/apis/proxies/v8/ai/chatbot/v
 }
 ```
 
-> **Next step:** copy `session_id` and store it in `localStorage`. Pass it to every turn and history call.
+> **Next step:** copy `session_id` and store it in `localStorage`. The first turn must send one of the `__cat__*` category `choice_id` values. The server will respond with the sub-flows for that category.
 
 ---
 
