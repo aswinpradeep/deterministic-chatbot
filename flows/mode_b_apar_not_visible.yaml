@@ -99,7 +99,7 @@ nodes:
           or (ctx.collected.org_name or '').lower() in ('igot',)
           or 'prarambh' in (ctx.collected.org_name or '').lower()
         then: show_wrong_org_message
-    default: fetch_cbp_plan
+    default: fetch_cbp_plan 
 
   - id: user_not_found_fallback
     type: message

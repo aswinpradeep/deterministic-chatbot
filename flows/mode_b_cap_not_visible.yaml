@@ -4,9 +4,25 @@
 # Flow: CAP Not Visible
 #
 # SOP:  Comprehensive Assessment Program (CAP) not visible
-# APIs: GET /api/user/private/v1/read/{userId}
+# Covers:
+#   - Profile Verification & Organization Mapping Checks
+#   - Detecting missing assignments vs incomplete child courses
+#   - Final Assessment locking criteria and child course progression
+#   - Validating SCORM and Non-SCORM pending resources 
+#   - Assessment limits & remaining attempts (User & Admin API checks)
+#   - MDO and YP/AM lookup fallbacks
+#   - Deterministic L2 Support ticket creation with contextual error states
+#
+# APIs: 
+#   - GET  /api/user/private/v1/read/{userId}
+#   - GET  /api/supportportal/admin/user/v2/assignedcourses/{userId}
+#   - GET  /api/course/private/v4/user/enrollment/list/{userId}
+#   - GET  /api/content/v2/read/{courseId}
+#   - POST /api/content/v1/search
+#   - GET  /api/course/v1/hierarchy/{courseId}
+#   - POST /api/course/v1/content/state/read
+#   - GET  /api/admin/assesment/retake/count
 # =============================================================================
-
 flow_id: CAP_NOT_VISIBLE
 flow_type: deterministic_with_llm_fallback
 version: 1
@@ -14,7 +30,8 @@ version: 1
 metadata:
   category:         course
   menu_label:       "📋 CAP not visible"
-  menu_group:       "Learning"
+  menu_group:       "CA/APAR Issue"
+  menu_group_order: 3
   menu_order:       7
   classification:   Query
   default_portal:   Learner Portal
@@ -47,11 +64,12 @@ imports:
   - fragment: _enrollment_picker
     with:
       node_id:       pick_cap_for_limit
-      prompt_text:   "Kindly search and select the relevant Course / Program / Event for which you are facing the issue:"
+      prompt_text:   "Kindly search and select the relevant Course / Program / Event for which you are facing the progress update or certificate generation issue."
       field_name:    course_id
       field_prefix:  ""
       next:          branch_on_cap_limit_certificate
   - _terminal
+
 
 nodes:
   - id: ask_cap_issue_type
@@ -205,16 +223,9 @@ nodes:
     type: branch
     rules:
       - if: "ctx.collected.cap_issue_type == 'cap_assessment_locked'"
-        then: fetch_all_enrollments
-      - if: "ctx.collected.cap_issue_type == 'cap_not_visible'"
-        then: branch_cap_due_date
-    default: confirm_expected_cap
-
-  - id: branch_cap_due_date
-    type: branch
-    rules:
-      - if: "has(ctx.collected.cap_end_date) and hours_since(ctx.collected.cap_end_date) > 0" 
-        then: cap_expired_message
+        then: branch_cap_count_for_assessment
+      - if: "ctx.collected.cap_issue_type == 'cap_enrollment_issue'"
+        then: cap_enrollment_confirm_name
     default: confirm_expected_cap
 
   - id: cap_not_assigned_message
@@ -230,17 +241,9 @@ nodes:
     type: message
     prompt:
       text: |
-        Upon checking, we found the following Comprehensive Assessment Program (CAP) assignments for your profile:
+        Since the due date has already passed, the CAP may no longer be visible on your dashboard.
 
-        {% for cap in ctx.collected.all_caps %}
-        - **CAP Name:** {{ cap.name | default('Not Available') }}
-          **Due Date:** {{ cap.endDate | default('Not Available') }}
-          **CAP Link:** https://portal.uat.karmayogibharat.net/app/toc/{{ cap.identifier }}/overview
-        {% endfor %}
-
-        Since the due date has passed for your CAP, it may no longer be visible on your dashboard. 
-
-        Kindly search for the CAP using the search bar on the iGOT Karmayogi portal and continue the assessment. 
+        Kindly search for the CAP using the **search bar** on the iGOT Karmayogi portal and continue the assessment.
     next: satisfied
 
   - id: confirm_expected_cap
@@ -252,7 +255,7 @@ nodes:
         {% for cap in ctx.collected.all_caps %}
         - **CAP Name:** {{ cap.name | default('Not Available') }}
           **Due Date:** {{ cap.endDate | default('Not Available') }}
-          **CAP Link:** https://portal.uat.karmayogibharat.net/app/toc/{{ cap.identifier }}/overview
+          **CAP Link:** [Open CAP](https://portal.uat.karmayogibharat.net/app/toc/{{ cap.identifier }}/overview)
         {% endfor %}
         
         Kindly confirm whether the CAP you were expecting is in this list.
@@ -261,7 +264,7 @@ nodes:
       - { id: no,  label: "❌ No" }
     disable_input: true
     on_reply:
-      yes: cap_active_message
+      yes: branch_cap_confirmed_expired
       no: cap_incorrect_message
 
   - id: cap_incorrect_message
@@ -273,15 +276,59 @@ nodes:
         If you believe that an incorrect Comprehensive Assessment Program (CAP) has been assigned to your profile, kindly connect with your department MDO for further verification and necessary changes.
     next: lookup_mdo_admin
 
+  - id: branch_cap_confirmed_expired
+    type: branch
+    rules:
+      - if: "has(ctx.collected.cap_end_date) and hours_since(ctx.collected.cap_end_date) > 0"
+        then: cap_expired_message
+    default: cap_active_message
+
   - id: cap_active_message
     type: message
     prompt:
       text: |
-        Thank you for your confirmation. 
-        
+        Thank you for your confirmation.
+
         Kindly use the link(s) provided above to access and continue your Comprehensive Assessment Program.
-        
-        We wish you the best for your assessment!
+
+        We wish you the best for your assessment! 🎯
+    next: satisfied
+
+  - id: cap_enrollment_confirm_name
+    type: message
+    prompt:
+      text: |
+        Upon checking, we found that the following Comprehensive Assessment Program (CAP) is assigned to your profile:
+
+        {% for cap in ctx.collected.all_caps | default([]) %}
+        - **CAP Name:** {{ cap.name | default('Not Available') }}
+        {% endfor %}
+
+        Kindly confirm whether this is the CAP you were expecting.
+    quick_replies:
+      - { id: yes, label: "✅ Yes" }
+      - { id: no,  label: "❌ No" }
+    disable_input: true
+    on_reply:
+      yes: cap_enrollment_confirmed_message
+      no: cap_incorrect_message
+
+  - id: cap_enrollment_confirmed_message
+    type: message
+    prompt:
+      text: |
+        Thank you for your confirmation.
+
+        Please find the assigned CAP details below:
+
+        {% for cap in ctx.collected.all_caps | default([]) %}
+        - **CAP Name:** {{ cap.name | default('Not Available') }}
+          **CAP Link:** [Open CAP](https://portal.uat.karmayogibharat.net/app/toc/{{ cap.identifier }}/overview)
+        {% endfor %}
+
+        Kindly use the above link(s) to access your Comprehensive Assessment Program.
+
+        Please feel free to reach out if you require any further assistance.
     next: satisfied
 
   - id: ask_incorrect_field_full
@@ -425,6 +472,8 @@ nodes:
         Please feel free to reach out if you require any further assistance.
     next: satisfied
 
+
+
   - id: api_error_escalation
     type: message
     prompt:
@@ -477,6 +526,37 @@ nodes:
   # ===========================================================================
   # Final Assessment Locked in CAP - Subcase 3
   # ===========================================================================
+
+  - id: branch_cap_count_for_assessment
+    type: branch
+    rules:
+      - if: "len(ctx.collected.all_caps or []) > 1"
+        then: pick_assigned_cap_dynamic
+    default: fetch_all_enrollments
+
+  - id: pick_assigned_cap_dynamic
+    type: collect
+    prompt:
+      text: "You are assigned multiple Comprehensive Assessment Programs (CAPs). Please select the one you are trying to complete:"
+    field:
+      name: collected.selected_cap_id
+      type: select
+    dynamic_options:
+      source: api
+      integration: karmayogi
+      request:
+        method: POST
+        url: "/api/supportportal/admin/user/v2/assignedcourses/{{ ctx.user_id_hash }}"
+        headers:
+          x-authenticated-user-token: ""
+        body:
+          courseCategory: "Comprehensive Assessment Program"
+      response_mapping:
+        list_path: "$.content"
+        id_field: identifier
+        label_field: name
+    next: fetch_all_enrollments
+
   - id: fetch_all_enrollments
     type: api_call
     integration: karmayogi
@@ -489,10 +569,19 @@ nodes:
             status: ["0", "1", "2"]
     response_mapping:
       - { from: "$.courses", to: collected.all_enrollment_list }
-    on_success: fetch_cap_hierarchy
+    on_success: branch_on_enrollment_status
     on_error:
       any: api_error_escalation
     timeout_ms: 8000
+
+  - id: branch_on_enrollment_status
+    type: branch
+    rules:
+      - if: "len([e for e in (ctx.collected.all_enrollment_list or []) if e.get('courseId') == ctx.collected.selected_cap_id]) > 0"
+        then: fetch_cap_hierarchy
+      - if: "not ctx.collected.selected_cap_id and len([e for e in (ctx.collected.all_enrollment_list or []) if e.get('courseId') == (ctx.collected.all_caps[0].get('identifier') if ctx.collected.all_caps else '')]) > 0"
+        then: fetch_cap_hierarchy
+    default: cap_not_enrolled_message
 
   - id: cap_not_enrolled_message
     type: message
@@ -501,15 +590,18 @@ nodes:
         Upon checking, we found that the assigned Comprehensive Assessment Program (CAP) is not yet enrolled.
 
         Kindly enroll in the assigned CAP to unlock the Final Assessment:
+        {% set target_cap_id = ctx.collected.selected_cap_id or (ctx.collected.all_caps[0].identifier if ctx.collected.all_caps else '') %}
         {% for cap in ctx.collected.all_caps | default([]) %}
-          {% set ns = namespace(enrolled=false) %}
-          {% for enroll in ctx.collected.all_enrollment_list | default([]) %}
-            {% if enroll.courseId == cap.identifier %}
-              {% set ns.enrolled = true %}
-            {% endif %}
-          {% endfor %}
-          {% if not ns.enrolled %}
+          {% if cap.identifier == target_cap_id %}
+            {% set ns = namespace(enrolled=false) %}
+            {% for enroll in ctx.collected.all_enrollment_list | default([]) %}
+              {% if enroll.courseId == cap.identifier %}
+                {% set ns.enrolled = true %}
+              {% endif %}
+            {% endfor %}
+            {% if not ns.enrolled %}
           - [{{ cap.name | default('Assigned CAP') }}](https://portal.uat.karmayogibharat.net/app/toc/{{ cap.identifier }}/overview)
+            {% endif %}
           {% endif %}
         {% endfor %}
     next: satisfied
@@ -519,7 +611,7 @@ nodes:
     integration: karmayogi
     request:
       method: GET
-      url: "/api/private/content/v3/hierarchy/{% set ns = namespace(cap_id='') %}{% for cap in ctx.collected.all_caps | default([]) %}{% for enroll in ctx.collected.all_enrollment_list | default([]) %}{% if enroll.courseId == cap.identifier %}{% set ns.cap_id = cap.identifier %}{% endif %}{% endfor %}{% endfor %}{{ ns.cap_id }}"
+      url: "/api/private/content/v3/hierarchy/{{ ctx.collected.selected_cap_id or (ctx.collected.all_caps[0].identifier if ctx.collected.all_caps else '') }}"
     response_mapping:
       - { from: "$.content.children", to: collected.cap_hierarchy_children }
     on_success: evaluate_child_courses
@@ -554,13 +646,11 @@ nodes:
             {% endif %}
           {% endfor %}
         {% else %}
-          {# If no child courses, check the CAP's own enrollment #}
-          {% for cap in ctx.collected.all_caps | default([]) %}
-            {% for enroll in ctx.collected.all_enrollment_list | default([]) %}
-              {% if enroll.courseId == cap.identifier and enroll.status != 2 and enroll.completionPercentage != 100 and not (enroll.issuedCertificates and enroll.issuedCertificates | length > 0) %}
-                {% set ns_global.has_incomplete = true %}
-              {% endif %}
-            {% endfor %}
+          {% set target_cap_id = ctx.collected.selected_cap_id or (ctx.collected.all_caps[0].identifier if ctx.collected.all_caps else '') %}
+          {% for enroll in ctx.collected.all_enrollment_list | default([]) %}
+            {% if enroll.courseId == target_cap_id and enroll.status != 2 and enroll.completionPercentage != 100 and not (enroll.issuedCertificates and enroll.issuedCertificates | length > 0) %}
+              {% set ns_global.has_incomplete = true %}
+            {% endif %}
           {% endfor %}
         {% endif %}
 
@@ -595,7 +685,7 @@ nodes:
                           {% set res_complete.val = true %}
                         {% endif %}
                       {% endfor %}
-                      {% if not res_complete.val %}
+                      {% if not res_complete.val and "assessment" not in module.name | default('') | lower %}
            - **Pending:** {{ module.name }}
                         {% set res_ns.found = true %}
                       {% endif %}
@@ -607,7 +697,7 @@ nodes:
                             {% set res_complete.val = true %}
                           {% endif %}
                         {% endfor %}
-                        {% if not res_complete.val %}
+                        {% if not res_complete.val and "assessment" not in resource.name | default('') | lower %}
            - **Pending:** {{ resource.name }}
                           {% set res_ns.found = true %}
                         {% endif %}
@@ -635,10 +725,22 @@ nodes:
             {% endif %}
           {% endfor %}
         {% else %}
+          {% set target_cap_id = ctx.collected.selected_cap_id or (ctx.collected.all_caps[0].identifier if ctx.collected.all_caps else '') %}
+          {% set selected_cap = namespace(obj=None) %}
           {% for cap in ctx.collected.all_caps | default([]) %}
-        1. [{{ cap.name | default('Assigned CAP') }}](https://portal.uat.karmayogibharat.net/app/toc/{{ cap.identifier }}/overview)
-           - **Pending:** Complete remaining modules
+            {% if cap.identifier == target_cap_id %}
+              {% set selected_cap.obj = cap %}
+            {% endif %}
           {% endfor %}
+          {% if selected_cap.obj %}
+            {% for enroll in ctx.collected.all_enrollment_list | default([]) %}
+              {% if enroll.courseId == target_cap_id and enroll.status != 2 and enroll.completionPercentage != 100 and not (enroll.issuedCertificates and enroll.issuedCertificates | length > 0) %}
+                {% set count.val = count.val + 1 %}
+        {{ count.val }}. [{{ selected_cap.obj.name | default('Assigned CAP') }}](https://portal.uat.karmayogibharat.net/app/toc/{{ target_cap_id }}/overview)
+                 - **Pending:** Complete remaining modules
+              {% endif %}
+            {% endfor %}
+          {% endif %}
         {% endif %}
         
         The Final Assessment will be unlocked only after all mandatory resources and child courses are completed successfully.
@@ -655,12 +757,12 @@ nodes:
         9. Complete all pending resources until every item shows a **Blue Tick**.
         {% else %}
         Upon checking, we found that all prerequisite courses have been completed successfully.
-        
-        If the Final Assessment is still showing as locked, please click **"🔒 Still locked"** below so we can help you troubleshoot (e.g., mobile access workarounds, attempt limits, or raising a support ticket).
+
+        Since the Final Assessment is still locked, kindly select the type of issue you are facing below so we can assist you further.
         {% endif %}
     quick_replies:
       - { id: incomplete_ack, label: "👍 Got it" }
-      - { id: locked, label: "🔒 Still locked" }
+      - { id: locked, label: "🔒 Help me unlock it" }
     disable_input: true
     on_reply:
       incomplete_ack: satisfied
@@ -672,50 +774,32 @@ nodes:
       text: |
         If you are unable to access or attempt the Final Assessment, please let me know what kind of issue you are facing:
     quick_replies:
-      - { id: mobile, label: "📱 Unable to complete from Mobile" }
-      - { id: other, label: "⚠️ Any Other Error" }
+      - { id: mobile, label: "📱 Unable to access from Mobile" }
+      - { id: other,  label: "⚠️ Any Other Error" }
     disable_input: true
     on_reply:
       mobile: cap_assessment_mobile_guidance
       other: cap_other_error_screenshot_guidance
 
   # ---------------------------------------------------------------------------
-  # Option 1 — Unable to Complete Assessment from Mobile
+  # Option 1 — Unable to Access Final Assessment from Mobile
   # ---------------------------------------------------------------------------
   - id: cap_assessment_mobile_guidance
     type: message
     prompt:
       text: |
-        Kindly try completing the assessment through the web portal by following the below steps:
+        Kindly try accessing the Final Assessment through the web portal by following the below steps:
 
-        1. Open **Google Chrome** or any web browser.
+        1. Open **Google Chrome**.
         2. Search for **iGOT Karmayogi**.
-        3. Open the **iGOT Karmayogi Portal**.
-        4. From the browser menu, enable **Desktop Site**.
-        5. Log in using your credentials.
-        6. Navigate to **My Learning**.
-        7. Open the relevant Course / Program / Event.
-        8. Click **Resume**.
-        9. Open the assessment and complete it.
-    quick_replies:
-      - { id: yes, label: "✅ Yes, completed successfully" }
-      - { id: no,  label: "❌ No, still facing issue" }
-    disable_input: true
-    on_reply:
-      yes: satisfied
-      no: cap_other_error_screenshot_guidance
-
-  # ---------------------------------------------------------------------------
-  # Option 2 — Assessment Limit Exceeded
-  # ---------------------------------------------------------------------------
-  - id: cap_assessment_limit_exceeded
-    type: message
-    prompt:
-      text: |
-        We will verify the assessment attempt details and raise a support ticket for further investigation.
-
-        The concerned team will check whether the assessment attempt limit has been exceeded and take the necessary action.
-    next: cap_raise_ticket_prompt
+        3. Open the **iGOT Karmayogi** portal.
+        4. Click the **three-dot menu** in the browser.
+        5. Enable **Desktop Site**.
+        6. Login to your account.
+        7. Navigate to **Profile → My Learning**.
+        8. Open the respective CAP.
+        9. Resume the **Final Assessment**.
+    next: satisfied
 
   # ---------------------------------------------------------------------------
   # Option 3 — Any Other Error
@@ -737,7 +821,7 @@ nodes:
     prompt:
       text: "Please provide your **registered email address** so we can raise a support ticket:"
     field:
-      name: collected.user_email
+      name: collected.email
       type: email
       validation:
         pattern: "^[\\w.+-]+@[\\w-]+\\.[a-z]{2,}$"
@@ -756,7 +840,13 @@ nodes:
         The user has reported a technical issue or locked Final Assessment within their CAP.
         Generate a Zoho support ticket.
         Subject: "CAP Final Assessment Issue - <org_name>"
-        Description: include the user email, the issue they reported (limit exceeded, technical issue, etc), and the CAP name.
+        Description: |
+          User Email: {{ ctx.collected.email }}
+          CAP Name: {{ ctx.collected.course_name }}
+          Issue reported: {{ ctx.collected.cap_issue_type }} / {{ ctx.collected.assessment_pending_issue }}
+          Batch ID: {{ ctx.collected.batch_id }}
+          Attempts list length: {{ len(ctx.collected.assessment_attempts_list or []) }}
+          Max attempts: {{ ctx.collected.assessment_max_attempts }}
       priority_override: P3
     on_complete: confirm_ticket
 
@@ -766,41 +856,57 @@ nodes:
   - id: branch_on_cap_limit_certificate
     type: branch
     rules:
-      - { if: "ctx.collected.completion_pct == 100", then: resolution_cap_already_complete }
-    default: api_read_cap_course_content
+      - if: "ctx.collected.issued_certificates != None and len(ctx.collected.issued_certificates) > 0"
+        then: resolution_cap_already_complete
+    default: api_read_cap_limit_content
 
-  - id: resolution_cap_already_complete
-    type: message
-    prompt:
-      text: |
-        Our records show that **{{ ctx.collected.course_name }}** is already marked as **100% complete** and the certificate is generated (if applicable).
-        
-        If your progress isn't reflecting correctly, please try logging out and logging back in.
-    next: satisfied
-
-  - id: api_read_cap_course_content
+  - id: api_read_cap_limit_content
     type: api_call
     integration: karmayogi
     request:
       method: GET
-      url: "/api/content/v1/read/{{ ctx.collected.course_id }}"
+      url: "/api/content/v2/read/{{ ctx.collected.course_id }}"
     response_mapping:
-      - from: "$.content.leafNodes"
-        to: collected.incomplete_ids
-        transform: diff_leaf_nodes
-        transform_ctx_key: collected.completed_ids
-    on_success: branch_on_cap_leaf_ids_available
+      - { from: "$.content.primaryCategory", to: collected.cap_limit_primary_category }
+      - { from: "$.content.mimeType",        to: collected.cap_limit_mime_type }
+      - { from: "$.content.leafNodes",       to: collected.cap_limit_incomplete_leaf_nodes, transform: diff_leaf_nodes, transform_ctx_key: collected.completed_ids }
+      - { from: "$.content.leafNodes",       to: collected.cap_limit_raw_leaf_nodes }
+      - { from: "$.content.children",        to: collected.cap_limit_child_ids, transform: extract_child_course_ids }
+    on_success: branch_on_cap_limit_content_type
     on_error:
-      any: api_fetch_cap_resource_metadata
+      any: resolution_cap_generic_error
     timeout_ms: 8000
 
-  - id: branch_on_cap_leaf_ids_available
+  - id: branch_on_cap_limit_content_type
     type: branch
     rules:
-      - { if: "len(ctx.collected.incomplete_ids) == 0", then: resolution_cap_already_complete }
-    default: api_fetch_cap_resource_metadata
+      - if: "ctx.collected.cap_limit_primary_category == 'Program'"
+        then: api_read_cap_limit_program_hierarchy
+    default: branch_on_cap_limit_incomplete_ids
 
-  - id: api_fetch_cap_resource_metadata
+  - id: api_read_cap_limit_program_hierarchy
+    type: api_call
+    integration: karmayogi
+    request:
+      method: GET
+      url: "/api/private/content/v3/hierarchy/{{ ctx.collected.course_id }}"
+    response_mapping:
+      - { from: "$.content.leafNodes", to: collected.cap_limit_incomplete_leaf_nodes, transform: diff_leaf_nodes, transform_ctx_key: collected.completed_ids }
+      - { from: "$.content.leafNodes", to: collected.cap_limit_raw_leaf_nodes }
+      - { from: "$.content.children",  to: collected.cap_limit_child_ids, transform: extract_child_course_ids }
+    on_success: branch_on_cap_limit_incomplete_ids
+    on_error:
+      any: resolution_cap_generic_error
+    timeout_ms: 8000
+
+  - id: branch_on_cap_limit_incomplete_ids
+    type: branch
+    rules:
+      - if: "len(ctx.collected.cap_limit_raw_leaf_nodes or []) > 0 and len(ctx.collected.cap_limit_incomplete_leaf_nodes or []) == 0"
+        then: resolution_cap_already_complete
+    default: api_fetch_limit_resource_metadata
+
+  - id: api_fetch_limit_resource_metadata
     type: api_call
     integration: karmayogi
     request:
@@ -809,12 +915,8 @@ nodes:
       body:
         request:
           filters:
-            identifier: "{{ ctx.collected.incomplete_ids }}"
-          isSecureSettingsDisabled: true
-          sort_by:
-            createdOn: "desc"
-          fields: ["identifier", "name", "mimeType", "status", "duration", "primaryCategory"]
-          facets: ["status"]
+            identifier: "{{ ctx.collected.cap_limit_incomplete_leaf_nodes or ctx.collected.cap_limit_child_ids or [ctx.collected.course_id] }}"
+          fields: ["identifier", "name", "mimeType", "status", "duration", "primaryCategory", "maxAttempts"]
           limit: 1000
     response_mapping:
       - { from: "$.content[*].name",  to: collected.incomplete_resource_names,    transform: extract_all_names }
@@ -822,96 +924,203 @@ nodes:
       - { from: "$.content[*]",        to: collected.scorm_resource_name,          transform: extract_scorm_resource_name }
       - { from: "$.content[*]",        to: collected.scorm_resource_duration_min,  transform: extract_scorm_duration_minutes }
       - { from: "$.content[*]",        to: collected.all_resources_assessment,     transform: detect_assessment_only }
-    on_success: branch_on_cap_resource_type
+      - { from: "$.content[0].maxAttempts", to: collected.assessment_max_attempts }
+      - { from: "$.content[0].identifier", to: collected.assessment_id }
+      - { from: "$.content",           to: collected.cap_limit_resources_metadata }
+    on_success: branch_on_missing_resource_names
     on_error:
       any: resolution_cap_generic_error
     timeout_ms: 8000
 
-  - id: branch_on_cap_resource_type
+  - id: branch_on_missing_resource_names
     type: branch
     rules:
-      - { if: "ctx.collected.all_resources_assessment == true", then: api_check_assessment_limit }
-      - { if: "ctx.collected.has_scorm_resources == true",      then: cap_limit_resolution_scorm_guidance }
-    default: cap_limit_resolution_non_scorm_guidance
+      - if: "ctx.collected.incomplete_resource_names == '' or ctx.collected.incomplete_resource_names == None"
+        then: api_fetch_limit_hierarchy_names
+    default: branch_on_limit_resource_type
 
-  - id: api_check_assessment_limit
+  - id: api_fetch_limit_hierarchy_names
     type: api_call
     integration: karmayogi
     request:
       method: GET
-      url: "/api/admin/assesment/retake/count?assessmentIdentifier={{ ctx.collected.incomplete_ids[0] }}&userId={{ ctx.user_id }}&editMode=false"
+      url: "/api/course/v1/hierarchy/{{ ctx.collected.course_id }}"
     response_mapping:
-      - { from: "$.attemptsMade", to: collected.attempts_made }
-      - { from: "$.attemptsAllowed", to: collected.attempts_allowed }
-    on_success: branch_on_assessment_limit
+      - { from: "$.content", to: collected.incomplete_resource_names, transform: extract_hierarchy_names, transform_ctx_key: collected.cap_limit_incomplete_leaf_nodes }
+    on_success: branch_on_limit_resource_type
+    on_error:
+      any: branch_on_limit_resource_type
+    timeout_ms: 8000
+
+  - id: branch_on_limit_resource_type
+    type: branch
+    rules:
+      - { if: "ctx.collected.all_resources_assessment == true", then: api_fetch_admin_assessment_limit }
+      - { if: "ctx.collected.has_scorm_resources == true",      then: resolution_cap_scorm_guidance }
+    default: resolution_cap_non_scorm_guidance
+
+  - id: resolution_cap_already_complete
+    type: message
+    prompt:
+      text: |
+        Our records indicate that you have already successfully completed **{{ ctx.collected.course_name }}**.
+        
+        If you have not downloaded your certificate yet, please follow these steps:
+        
+        1. Go to **Profile** → **My Learning**.
+        2. Search and select **{{ ctx.collected.course_name }}**.
+        3. Open the course details page and navigate to the **About** section.
+        4. Click on **Download Certificate**.
+    next: satisfied
+
+  - id: resolution_cap_generic_error
+    type: message
+    prompt:
+      text: |
+        I'm having trouble fetching the course details right now.
+        
+        If the issue persists, we can raise a support ticket.
+    quick_replies:
+      - { id: raise, label: "📋 Raise a ticket" }
+      - { id: skip,  label: "❌ I'll try later" }
+    disable_input: true
+    on_reply:
+      raise: cap_raise_ticket_prompt
+      skip:  satisfied
+
+  - id: resolution_cap_scorm_guidance
+    type: resolution
+    prompt:
+      text: |
+        We see that you have enrolled in **{{ ctx.collected.course_name }}**.
+
+        The resource titled **“{{ ctx.collected.scorm_resource_name }}”** is still **In Progress** or **Not Started**.
+
+        The resource is in **SCORM format**.
+
+        Please note the following:
+        - The course is meant to be understood and completed in **one session**.
+        - If you try to increase the playback speed, your progress may **not be recorded correctly**.
+        - This may cause issues while generating your **course certificate**.
+
+        **Additional Instruction:**
+        If the resource duration is **{{ ctx.collected.scorm_resource_duration_min }} minutes**, you must spend at least **{{ ctx.collected.scorm_resource_duration_min }} minutes** on that resource.
+
+        At the end, click the **“Next”** button in the upper-right corner to move to the next resource. Only then will the progress reflect as completed.
+    steps:
+      - "Go to **Profile** → **My Learning** → **In Progress**"
+      - "Locate **{{ ctx.collected.course_name }}** and click **Resume**"
+      - "Expand each module (click the **+** icon)"
+      - "Check for content items **without a blue tick mark**"
+      - "All modules must show a **blue tick** to complete the course 100%"
+      - "Resume and complete the pending videos or content from the **top-right corner** until all items are marked complete"
+    follow_up:
+      text: "Has your issue been resolved?"
+      quick_replies:
+        - { id: YES,     label: "✅ Yes, progress updated" }
+        - { id: NO,      label: "❌ No, still not updating" }
+        - { id: other,   label: "⚠️ Any Other Error" }
+    on_reply:
+      YES: satisfied
+      NO: cap_other_error_screenshot_guidance
+      other: cap_other_error_screenshot_guidance
+
+  - id: resolution_cap_non_scorm_guidance
+    type: resolution
+    prompt:
+      text: |
+        We see that you have enrolled in **{{ ctx.collected.course_name }}**.
+
+        The following resources are still **In Progress** or **Not Started**:
+
+        {{ ctx.collected.incomplete_resource_names }}
+
+        Kindly revisit the course and complete the above resources to update your progress.
+    steps:
+      - "Go to **Profile** → **My Learning** → **In Progress**"
+      - "Locate **{{ ctx.collected.course_name }}** and click **Resume**"
+      - "Expand each module (click the **+** icon)"
+      - "Check for content items **without a blue tick mark**"
+      - "All modules must show a **blue tick** to complete the course 100%"
+      - "Resume and complete the pending videos or content from the **top-right corner** until all items are marked complete"
+    follow_up:
+      text: "Has your issue been resolved?"
+      quick_replies:
+        - { id: YES,     label: "✅ Yes, progress updated" }
+        - { id: NO,      label: "❌ No, still not updating" }
+        - { id: other,   label: "⚠️ Any Other Error" }
+    on_reply:
+      YES: satisfied
+      NO: cap_other_error_screenshot_guidance
+      other: cap_other_error_screenshot_guidance
+
+  - id: msg_only_assessment_pending
+    type: message
+    prompt:
+      text: |
+        We found that all learning resources for **{{ ctx.collected.course_name }}** have been completed successfully.
+        However, the assessment is still pending.
+
+        Kindly complete the assessment to achieve 100% completion.
+
+        If you are unable to complete the assessment, please choose one of the options below:
+    quick_replies:
+      - { id: mobile, label: "📱 Unable to complete from Mobile" }
+      - { id: limit, label: "🚫 Assessment Limit Exceeded" }
+      - { id: other, label: "⚠️ Any Other Error" }
+    disable_input: true
+    on_reply:
+      mobile: cap_assessment_mobile_guidance
+      limit: api_fetch_assessment_limit
+      other: cap_other_error_screenshot_guidance
+
+  - id: api_fetch_assessment_limit
+    type: api_call
+    integration: karmayogi
+    request:
+      method: POST
+      url: "/api/course/v1/content/state/read"
+      body:
+        request:
+          userId: "{{ ctx.user_id_hash }}"
+          courseId: "{{ ctx.collected.course_id }}"
+          batchId: "{{ ctx.collected.batch_id }}"
+          contentIds: ["{{ ctx.collected.assessment_id }}"]
+    response_mapping:
+      - { from: "$.result.content[0].score", to: collected.assessment_attempts_list }
+    on_success: branch_on_attempts_remaining
     on_error:
       any: cap_assessment_limit_exceeded
     timeout_ms: 8000
 
-  - id: branch_on_assessment_limit
+  - id: branch_on_attempts_remaining
     type: branch
     rules:
-      - if: "has(ctx.collected.attempts_allowed) and has(ctx.collected.attempts_made) and (int(ctx.collected.attempts_allowed) - int(ctx.collected.attempts_made) > 0)"
-        then: resolution_assessment_attempts_remaining
-    default: cap_assessment_limit_exceeded
+      - if: "len(ctx.collected.assessment_attempts_list or []) >= (ctx.collected.assessment_max_attempts or 3)"
+        then: cap_assessment_limit_exceeded
+    default: msg_attempts_remaining
 
-  - id: resolution_assessment_attempts_remaining
+  - id: msg_attempts_remaining
+    type: resolution
+    prompt:
+      text: |
+        Upon verification, you still have **{{ (ctx.collected.assessment_max_attempts or 3) - len(ctx.collected.assessment_attempts_list or []) }} attempt(s)** remaining for the assessment.
+
+        Kindly retry the assessment to complete the course.
+    steps:
+      - "Go to **Profile** → **My Learning** → **In Progress**"
+      - "Open **{{ ctx.collected.course_name }}** and click **Resume**"
+      - "Locate the Final Assessment and click **Start / Resume**"
+    next: satisfied
+
+  - id: cap_assessment_limit_exceeded
     type: message
     prompt:
       text: |
-        Upon verification, you still have **{{ int(ctx.collected.attempts_allowed) - int(ctx.collected.attempts_made) }} attempt(s)** remaining for this assessment.
-        
-        Kindly navigate to the course and retry the assessment.
-    next: satisfied
+        We will raise a support ticket for further investigation.
 
-  - id: cap_limit_resolution_scorm_guidance
-    type: resolution
-    prompt:
-      text: |
-        The resource titled **“{{ ctx.collected.scorm_resource_name }}”** is still **In Progress** or **Not Started**.
-
-        This resource is in **SCORM format**. Please note:
-        - The course is meant to be understood and completed in **one session**.
-        - If you try to increase the playback speed, your progress may **not be recorded correctly**.
-        - If the resource duration is **{{ ctx.collected.scorm_resource_duration_min }} minutes**, you must spend at least **{{ ctx.collected.scorm_resource_duration_min }} minutes** on it.
-        
-        At the end, click the **“Next”** button in the upper-right corner to move to the next resource. Only then will the progress reflect as completed.
-    steps:
-      - "Go to **Profile** → **My Learning** → **In Progress**"
-      - "Open **{{ ctx.collected.course_name }}** and click **Resume**"
-      - "Expand each module (click the **+** icon) and find items without a blue tick"
-      - "Complete them properly in one session"
-    follow_up:
-      text: "Were you able to complete the pending resource?"
-      quick_replies:
-        - { id: YES,     label: "✅ Yes, completed successfully" }
-        - { id: NO,      label: "❌ No, still facing issue" }
-    on_reply:
-      YES: satisfied
-      NO: cap_child_course_technical_message
-
-  - id: cap_limit_resolution_non_scorm_guidance
-    type: resolution
-    prompt:
-      text: |
-        The following resources are still **In Progress** or **Not Started** in **{{ ctx.collected.course_name }}**:
-
-        {{ ctx.collected.incomplete_resource_names }}
-
-        Kindly revisit the course and complete these resources to achieve 100% completion.
-    steps:
-      - "Go to **Profile** → **My Learning** → **In Progress**"
-      - "Open **{{ ctx.collected.course_name }}** and click **Resume**"
-      - "Expand each module (click the **+** icon)"
-      - "Complete any items without a blue tick"
-    follow_up:
-      text: "Were you able to complete the pending resources?"
-      quick_replies:
-        - { id: YES,     label: "✅ Yes, completed successfully" }
-        - { id: NO,      label: "❌ No, still facing issue" }
-    on_reply:
-      YES: satisfied
-      NO: cap_child_course_technical_message
+        The concerned team will check whether the assessment attempt limit has been exceeded and take the necessary action.
+    next: cap_raise_ticket_prompt
 
   # ===========================================================================
   # Child Course Technical Issue & Engineering Excel
@@ -930,7 +1139,7 @@ nodes:
     prompt:
       text: "Please provide your **registered email address** so we can raise a support ticket:"
     field:
-      name: collected.user_email
+      name: collected.email
       type: email
       validation:
         pattern: "^[\\w.+-]+@[\\w-]+\\.[a-z]{2,}$"
@@ -953,18 +1162,55 @@ nodes:
       priority_override: P3
     on_complete: confirm_ticket
 
-  - id: resolution_cap_generic_error
+  # ===========================================================================
+  # Dynamic Ticket Confirmation Override
+  # ===========================================================================
+  - id: ticket_confirmation
     type: message
     prompt:
       text: |
-        I'm having trouble fetching the course details right now.
-        
-        If the issue persists, we can raise a support ticket.
-    quick_replies:
-      - { id: raise, label: "📋 Raise a ticket" }
-      - { id: skip,  label: "❌ I'll try later" }
-    disable_input: true
-    on_reply:
-      raise: cap_raise_ticket_prompt
-      skip:  satisfied
+        {% if ctx.collected.cap_issue_type == 'cap_assessment_limit' or ctx.collected.assessment_pending_issue == 'limit' %}
+        We have verified that the assessment attempt limit has been exceeded. A support ticket (Ticket ID: #{{ ctx.collected.ticket_id }}) has been raised and shared with the concerned team for further investigation.
+        {% elif ctx.collected._last_choice_id == 'other' %}
+        We have captured the reported error and raised a support ticket (Ticket ID: {{ ctx.collected.ticket_id }}) for further investigation.
+        {% else %}
+        ✅ Ticket **#{{ ctx.collected.ticket_id }}** raised. L2 team will reach you within **2 business days**. 📧
+        {% endif %}
+    next: ticket_raised_end
 
+  # ===========================================================================
+  # Assessment Limit Exceeded - Admin Check (New API)
+  # ===========================================================================
+  - id: api_fetch_admin_assessment_limit
+    type: api_call
+    integration: karmayogi
+    request:
+      method: GET
+      url: "/api/admin/assesment/retake/count?assessmentIdentifier={{ ctx.collected.assessment_id }}&userId={{ ctx.user_id_hash }}&editMode=false"
+    response_mapping:
+      - { from: "$.result.attemptsMade", to: collected.assessment_attempts_made }
+      - { from: "$.result.attemptsAllowed", to: collected.assessment_attempts_allowed }
+    on_success: branch_on_admin_attempts_remaining
+    on_error:
+      any: cap_assessment_limit_exceeded
+    timeout_ms: 8000
+
+  - id: branch_on_admin_attempts_remaining
+    type: branch
+    rules:
+      - if: "(ctx.collected.assessment_attempts_allowed | default(0)) - (ctx.collected.assessment_attempts_made | default(0)) <= 0"
+        then: cap_assessment_limit_exceeded
+    default: msg_admin_attempts_remaining
+
+  - id: msg_admin_attempts_remaining
+    type: resolution
+    prompt:
+      text: |
+        Upon verification, you still have **{{ (ctx.collected.assessment_attempts_allowed | default(0)) - (ctx.collected.assessment_attempts_made | default(0)) }} attempt(s)** remaining for the assessment.
+
+        Kindly retry the assessment to complete the course.
+    steps:
+      - "Go to **Profile** → **My Learning** → **In Progress**"
+      - "Open **{{ ctx.collected.course_name }}** and click **Resume**"
+      - "Locate the Final Assessment and click **Start / Resume**"
+    next: satisfied
