@@ -399,8 +399,10 @@ async def submit_turn(
         )
         state_dict = state.model_dump(mode="json")
         state_dict["flow_id"] = flow_id
-        # Seed user_id from JWT so ticket templates can reference it
+        # Seed user_id into collected; store raw JWT in _session_token (not in collected —
+        # keeps it out of LLM context and YAML templates; accessible only via __SESSION_TOKEN__ sentinel)
         state_dict.setdefault("collected", {})["user_id"] = user_id
+        state_dict["session_token"] = request.headers.get(settings.auth_header_name, "")
 
         # Pre-fetch user profile (email/name/mobile) once at flow start so every
         # flow has it available without per-flow profile fetch nodes.

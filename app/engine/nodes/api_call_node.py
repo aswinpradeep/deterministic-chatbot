@@ -42,10 +42,20 @@ YAML shape (canonical example):
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import json
 import logging
+import math
+import time
 from typing import Any, Callable
 
 log = logging.getLogger(__name__)
+
+# Module-level in-memory TTL cache for api_call nodes that declare `cache:`.
+# Key: MD5 of (integration, method, url, params, body).
+# Value: (expiry_timestamp, result).
+# Shared across all sessions/requests; cleared on server restart.
+_NODE_RESPONSE_CACHE: dict[str, tuple[float, Any]] = {}
 
 from app.engine.nodes.base import NodeHandler
 from app.engine.state import ConversationState
@@ -121,45 +131,130 @@ class ApiCallNode(NodeHandler):
                 )
                 return _record_error(state, cfg, f"request_render_failed:{e}")
 
+            # Replace __SESSION_TOKEN__ sentinel with the actual Keycloak JWT from state.
+            # The token is never exposed to Jinja templates — only YAML headers that
+            # explicitly declare this sentinel value receive the user JWT.
+            if rendered.get("headers"):
+                _tok = state.session_token
+                rendered["headers"] = {
+                    k: (_tok if v == "__SESSION_TOKEN__" else v)
+                    for k, v in rendered["headers"].items()
+                }
+
             log.info(
                 "[api_call] node=%s  integration=%s  %s %s  timeout=%dms",
                 node_id, integration_name, rendered["method"], rendered["url"], timeout_ms,
             )
 
-            # Delegate the HTTP call to the integration adapter.
-            # Adapter prepends base URL + injects auth + handles refresh on 401.
-            try:
-                result = await asyncio.wait_for(
-                    integration.execute_request(
-                        method=rendered["method"],
-                        url=rendered["url"],
-                        params=rendered.get("params"),
-                        body=rendered.get("body"),
-                        headers=rendered.get("headers"),
-                    ),
-                    timeout=timeout_ms / 1000.0,
-                )
-            except asyncio.TimeoutError:
-                log.error(
-                    "[api_call] node=%s timed out after %dms (integration=%s %s %s)",
-                    node_id, timeout_ms, integration_name, rendered["method"], rendered["url"],
-                )
-                return _record_error(state, cfg, "timeout")
-            except IntegrationNotFound:
-                log.error(
-                    "[api_call] node=%s got 404 Not Found from %s %s %s",
-                    node_id, integration_name, rendered["method"], rendered["url"],
-                )
-                return _record_error(state, cfg, "not_found")
-            except Exception as e:  # noqa: BLE001
-                log.error(
-                    "[api_call] node=%s raised %s: %s  (integration=%s %s %s)",
-                    node_id, type(e).__name__, e,
-                    integration_name, rendered["method"], rendered["url"],
-                )
-                return _record_error(state, cfg, f"any:{e}")
+            # Cache check — skip HTTP call if a valid cached result exists.
+            cache_cfg = cfg.get("cache")
+            cache_key: str | None = None
+            cache_ttl: int = 3600
+            result: Any = None
+            cache_hit = False
 
-            log.info("[api_call] node=%s completed successfully", node_id)
+            if cache_cfg:
+                cache_ttl = int(cache_cfg.get("ttl_seconds", 3600))
+                _raw = json.dumps({
+                    "i": integration_name,
+                    "m": rendered["method"],
+                    "u": rendered["url"],
+                    "p": rendered.get("params"),
+                    "b": rendered.get("body"),
+                }, sort_keys=True, default=str)
+                cache_key = hashlib.md5(_raw.encode()).hexdigest()  # noqa: S324
+                cached = _NODE_RESPONSE_CACHE.get(cache_key)
+                if cached:
+                    expiry, cached_result = cached
+                    if time.time() < expiry:
+                        log.info("[api_call] node=%s cache HIT (key=%.8s ttl=%ds)", node_id, cache_key, cache_ttl)
+                        result = cached_result
+                        cache_hit = True
+
+            if not cache_hit:
+                # Delegate the HTTP call to the integration adapter.
+                try:
+                    result = await asyncio.wait_for(
+                        integration.execute_request(
+                            method=rendered["method"],
+                            url=rendered["url"],
+                            params=rendered.get("params"),
+                            body=rendered.get("body"),
+                            headers=rendered.get("headers"),
+                        ),
+                        timeout=timeout_ms / 1000.0,
+                    )
+                except asyncio.TimeoutError:
+                    log.error(
+                        "[api_call] node=%s timed out after %dms (integration=%s %s %s)",
+                        node_id, timeout_ms, integration_name, rendered["method"], rendered["url"],
+                    )
+                    return _record_error(state, cfg, "timeout")
+                except IntegrationNotFound:
+                    log.error(
+                        "[api_call] node=%s got 404 Not Found from %s %s %s",
+                        node_id, integration_name, rendered["method"], rendered["url"],
+                    )
+                    return _record_error(state, cfg, "not_found")
+                except Exception as e:  # noqa: BLE001
+                    log.error(
+                        "[api_call] node=%s raised %s: %s  (integration=%s %s %s)",
+                        node_id, type(e).__name__, e,
+                        integration_name, rendered["method"], rendered["url"],
+                    )
+                    return _record_error(state, cfg, f"any:{e}")
+
+                log.info("[api_call] node=%s completed successfully", node_id)
+
+            # Pagination: if `paginate` is configured, fetch remaining pages and
+            # merge all items into `result` before response_mapping runs.
+            # Skipped on cache hit — the cached result already has all pages merged.
+            paginate_cfg = cfg.get("paginate") if not cache_hit else None
+            if paginate_cfg:
+                p_count_path = paginate_cfg.get("total_count_path", "").lstrip("$").lstrip(".")
+                p_list_path  = paginate_cfg.get("list_path", "").lstrip("$").lstrip(".")
+                p_page_param = paginate_cfg.get("page_param", "pageNumber")
+                p_page_size  = paginate_cfg.get("page_size", 100)
+                max_pages    = int(paginate_cfg.get("max_pages", 50))
+                if not p_page_size:
+                    log.warning("[api_call] node=%s page_size is 0 — defaulting to 100", node_id)
+                    p_page_size = 100
+                total_count  = _jsonpath_get(result, p_count_path) or 0
+                total_pages  = min(math.ceil(total_count / p_page_size), max_pages)
+                all_items: list = list(_jsonpath_get(result, p_list_path) or [])
+                for page_num in range(2, total_pages + 1):
+                    page_body = {**(rendered.get("body") or {}), p_page_param: page_num}
+                    try:
+                        page_result = await asyncio.wait_for(
+                            integration.execute_request(
+                                method=rendered["method"],
+                                url=rendered["url"],
+                                params=rendered.get("params"),
+                                body=page_body,
+                                headers=rendered.get("headers"),
+                            ),
+                            timeout=timeout_ms / 1000.0,
+                        )
+                        page_items = _jsonpath_get(page_result, p_list_path) or []
+                        all_items.extend(page_items)
+                        log.info("[api_call] node=%s page=%d fetched %d items (total so far: %d)",
+                                 node_id, page_num, len(page_items), len(all_items))
+                    except Exception:  # noqa: BLE001
+                        log.warning("[api_call] node=%s pagination stopped at page %d", node_id, page_num)
+                        break
+                # Write merged list back into result so response_mapping sees the full set
+                parts = p_list_path.split(".")
+                target = result
+                for part in parts[:-1]:
+                    if isinstance(target, dict):
+                        target = target.get(part, {})
+                if isinstance(target, dict) and parts:
+                    target[parts[-1]] = all_items
+
+            # Store result in cache after successful fetch + pagination.
+            if cache_key and not cache_hit:
+                _NODE_RESPONSE_CACHE[cache_key] = (time.time() + cache_ttl, result)
+                log.info("[api_call] node=%s cached result (key=%.8s ttl=%ds)", node_id, cache_key, cache_ttl)
 
             # Apply response_mapping → populate state.collected
             updates: dict[str, Any] = {}
@@ -1337,6 +1432,25 @@ def _extract_hierarchy_names(hierarchy: Any, incomplete_ids: Any) -> str:
     return ", ".join(names)
 
 
+def _flatten_cadre_services(value: Any) -> list[dict]:
+    """Flatten cadreConfig nested service list into [{id, name}, ...].
+
+    Input: result.response.value (after karmayogi.py unwraps result envelope).
+    Traversal: civilServiceType.civilServiceTypeList[].serviceList[]
+    """
+    if not isinstance(value, dict):
+        return []
+    type_list = value.get("civilServiceType", {}).get("civilServiceTypeList", [])
+    services = []
+    for service_type in type_list:
+        for service in service_type.get("serviceList", []):
+            sid  = service.get("id", "")
+            name = service.get("name", "")
+            if sid and name:
+                services.append({"id": sid, "name": name})
+    return services
+
+
 # Registry of named transforms usable in YAML response_mapping `transform:` field.
 _TRANSFORMS: dict[str, Any] = {
     "extract_hierarchy_names":     _extract_hierarchy_names,
@@ -1401,6 +1515,8 @@ _TRANSFORMS: dict[str, Any] = {
     # (requires transform_ctx_key: collected.user_eligibility_ctx)
     # Checks organisation list + isVerifiedKarmayogi flag against user profile
     "check_secure_settings_eligibility": _check_secure_settings_eligibility,  # (secureSettings, user_eligibility_ctx) → bool
+    # cadreConfig master list flattening
+    "flatten_cadre_services":        _flatten_cadre_services,
 }
 
 
@@ -1480,3 +1596,4 @@ def _jsonpath_get_list(data: Any, path: str) -> list[Any]:
         if cur is None:
             return []
     return [cur] if cur is not None else []
+
