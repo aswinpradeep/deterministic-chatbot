@@ -71,6 +71,7 @@ class KarmayogiService:
             httpx.HTTPError: on other failures (timeout, connection, 5xx)
         """
         client = await self._get_client()
+
         merged_headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Accept": "application/json",
@@ -93,7 +94,6 @@ class KarmayogiService:
                 method, url, resp.status_code, resp.text[:500],
             )
         resp.raise_for_status()
-
         data = resp.json()
 
         # Unwrap Karmayogi's {result: {...}} envelope if present, so YAML can
