@@ -44,7 +44,7 @@
 
 flow_id: MULTIPLE_ACCOUNT
 flow_type: deterministic_with_llm_fallback
-version: 2❌ Invalid format. Please enter exactly 10 digits starting with 6-9. No letters, emails, or special characters allowed.
+version: 2
 
 metadata:
   category:         account
@@ -134,7 +134,7 @@ nodes:
       type: text
       validation:
         pattern:   "^[6-9][0-9]{9}$"
-        error_msg: "❌ Invalid format. Please enter exactly 10 digits starting with 6-9. No letters, emails, or special characters allowed."
+        error_msg: "❌ Invalid format. Please enter a valid 10-digit Indian mobile number (without country code)."
     next: validate_mobile_format
 
   # Explicit mobile format validation (ensures no emails slip through)
