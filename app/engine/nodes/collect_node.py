@@ -447,8 +447,12 @@ def _item_get(raw: dict[str, Any], path: str) -> Any:
 
     Supports both flat keys (e.g. 'courseId') and nested keys
     (e.g. 'event.name' → raw['event']['name']).
+    Returns the root object if path is '$'.
     Returns None if any level is missing.
     """
+    if path == "$":
+        return raw
+
     cur: Any = raw
     for part in path.split("."):
         if not isinstance(cur, dict):

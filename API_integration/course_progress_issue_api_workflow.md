@@ -1,4 +1,4 @@
-# UC-01: Course / Program / Event Progress Issue — API Integration Guide
+# UC-01: Course / Program Progress Issue — API Integration Guide
 
 > Karmayogi platform APIs consumed by the chatbot, in execution order. Intended for iGot developers integrating or extending this workflow.
 
@@ -21,7 +21,7 @@ STEP 2 → GET   /api/content/v1/read/{course_id}
               ↓ Confirm primaryCategory (Course / Program)
               ↓
          IF Program                          → STEP 3
-         IF Course / Event                   → STEP 4
+         IF Course                          → STEP 4
 
 STEP 3 → GET   /api/private/content/v3/hierarchy/{program_id}?mode=edit          [Programs only]
               ↓ Fetch child Course DO_IDs → child_course_ids
@@ -59,13 +59,7 @@ STEP 7 → GET   /api/admin/assesment/retake/count               [Assessment lim
          ✓ Diagnosis complete
 ```
 
-### Event Path
 
-```
-STEP 1B → GET  /api/user/private/v1/events/list/{user_id}
-               ↓ User selects event; store course_name, enrollment_status, completed_on_iso
-               ↓ Show event progress guidance — no further API calls
-```
 
 ### Revalidation Path (completion = 100 but no certificate)
 
@@ -166,27 +160,7 @@ curl -X POST \
 
 ---
 
-## Step 1B — Event Enrollment List
 
-> Renders the event picker. No further API calls are made after selection — progress guidance is shown directly.
-
-**Endpoint:** `GET /api/user/private/v1/events/list/{user_id}`
-
-```bash
-curl -X GET \
-  "https://portal.uat.karmayogibharat.net/api/user/private/v1/events/list/{user_id}"
-```
-
-### Response Fields Used
-
-| Field | Stored As | Transform | Used For |
-|---|---|---|---|
-| `events[].contentId` | picker `id_field` | — | Event selection value |
-| `events[].event.name` | `collected.course_name` | — | Event name shown in guidance message |
-| `events[].status` | `collected.enrollment_status` | `enrollment_status_to_int` | Enrollment state as integer |
-| `events[].completedOn` | `collected.completed_on_iso` | `unix_ms_to_iso` | Completion timestamp in ISO format |
-
----
 
 ## Step 2 — Content Type Check
 
@@ -210,7 +184,7 @@ curl -X GET \
 | Condition | Action |
 |---|---|
 | `primary_category == "Program"` | Proceed to Step 3 (hierarchy fetch) |
-| Any other value (`"Course"`, `"Event"`) | Skip to Step 4 (Admin Content State) |
+| Any other value (`"Course"`) | Skip to Step 4 (Admin Content State) |
 
 ---
 
@@ -271,21 +245,21 @@ curl -X POST \
 ```
 
 > **Programs:** called in a loop once for **each** `child_course_ids[i]`. Consumption records are accumulated across all iterations before the technical-issue comparison runs.
-> **Courses / Events:** called once using `course_id` directly.
+> **Courses:** called once using `course_id` directly.
 
 ### Request Fields
 
 | Field | Value | Purpose |
 |---|---|---|
 | `userId` | `ctx.user_id_hash` | Learner's user ID |
-| `courseId` | `child_course_ids[loop_index]` for Programs; `course_id` for Courses/Events | Must be a Course DO_ID (not Program DO_ID) |
+| `courseId` | `child_course_ids[loop_index]` for Programs; `course_id` for Courses | Must be a Course DO_ID (not Program DO_ID) |
 | `batchId` | `collected.batch_id` | Batch reference from enrollment; may be null for in-progress courses |
 
 ### Response Fields Used
 
 | Path | Stored As | Transform | Used For |
 |---|---|---|---|
-| `$.consumptionRecords[*]` | `collected.admin_content_states` | `append_consumption_records` (Programs loop) / `extract_consumption_records` (Course/Event) | Accumulated list of `{contentid, language, status}` records passed to `compare_enrollment_vs_admin_state` |
+| `$.consumptionRecords[*]` | `collected.admin_content_states` | `append_consumption_records` (Programs loop) / `extract_consumption_records` (Course) | Accumulated list of `{contentid, language, status}` records passed to `compare_enrollment_vs_admin_state` |
 
 > Each record: `contentid` = leaf resource DO_ID, `language` = content language (e.g. `"english"`), `status` = `0` (not started) / `1` (in-progress) / `2` (completed).
 
@@ -307,7 +281,7 @@ Iteration 2: call Admin Content State with child_course_ids[1] → append record
 
 `append_consumption_records` (with `transform_ctx_key: collected.admin_content_states`) merges each response into the accumulating list. On API error for any single child course, the loop advances to the next course without stopping.
 
-> **On API error (Course/Event path — missing batchId):** falls through directly to Step 5 without technical issue detection.
+> **On API error (Course path — missing batchId):** falls through directly to Step 5 without technical issue detection.
 
 ### Technical Issue Detection Logic
 
@@ -572,7 +546,7 @@ return remaining if remaining > 0 else 0
 | 1 | `POST .../enrollment/list/{user_id}` | Course/Program picker | `batchId` / `batches` → `batch_id` | Step 4 request body |
 | 1 | `POST .../enrollment/list/{user_id}` | Course/Program picker | `primaryCategory` → `primary_category` | Step 2 branch: Program vs Course |
 | 1 | `POST .../enrollment/list/{user_id}` | Course/Program picker | `contentId` → `content_do_id` | Step 7 `assessmentIdentifier`; ticket description |
-| 1B | `GET .../events/list/{user_id}` | Event picker | `event.name` → `course_name` | Event guidance message |
+
 | 2 | `GET /api/content/v1/read/{course_id}` | Content type check | `$.content.primaryCategory` → `primary_category` | Branch: Program → Step 3, else Step 4 |
 | 3 | `GET /api/private/content/v3/hierarchy/{program_id}?mode=edit` | Program child course IDs | `children[*].identifier` → `child_course_ids` | Step 4 loop `courseId` field |
 | 4 | `POST /api/admin/content/state/read` | Technical issue detection (loop — once per child course for Programs) | `consumptionRecords[*]` → `admin_content_states` (accumulated via `append_consumption_records`) | `compare_enrollment_vs_admin_state` |

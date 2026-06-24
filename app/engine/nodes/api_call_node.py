@@ -1451,6 +1451,48 @@ def _flatten_cadre_services(value: Any) -> list[dict]:
     return services
 
 
+def _extract_event_time_spent(event: Any) -> float:
+    """Extract time spent (duration) from an event's progress details.
+    
+    Checks both top-level 'lrcProgressDetails' and 'userEventConsumption[0].progressdetails'.
+    Parses the JSON string and extracts the 'duration' field.
+    """
+    if not isinstance(event, dict):
+        return 0.0
+
+    def parse_duration(details_str: Any) -> float:
+        if isinstance(details_str, str):
+            try:
+                import json
+                data = json.loads(details_str)
+                return float(data.get("duration", 0.0))
+            except (json.JSONDecodeError, TypeError, ValueError):
+                pass
+        return 0.0
+
+    dur1 = parse_duration(event.get("lrcProgressDetails"))
+    if dur1 > 0:
+        return dur1
+
+    consumptions = event.get("userEventConsumption", [])
+    if isinstance(consumptions, list) and len(consumptions) > 0:
+        first = consumptions[0]
+        if isinstance(first, dict):
+            dur2 = parse_duration(first.get("progressdetails"))
+            if dur2 > 0:
+                return dur2
+                
+    return 0.0
+
+
+def _is_youtube_embed_url(url: Any) -> bool:
+    """Return True if the URL is a valid YouTube embed link."""
+    if not isinstance(url, str):
+        return False
+    import re
+    return bool(re.search(r"youtube\.com/embed/", url, re.IGNORECASE))
+
+
 # Registry of named transforms usable in YAML response_mapping `transform:` field.
 _TRANSFORMS: dict[str, Any] = {
     "extract_hierarchy_names":     _extract_hierarchy_names,
@@ -1517,6 +1559,9 @@ _TRANSFORMS: dict[str, Any] = {
     "check_secure_settings_eligibility": _check_secure_settings_eligibility,  # (secureSettings, user_eligibility_ctx) → bool
     # cadreConfig master list flattening
     "flatten_cadre_services":        _flatten_cadre_services,
+    # Event related issues SOP transforms
+    "extract_event_time_spent":      _extract_event_time_spent,
+    "is_youtube_embed_url":          _is_youtube_embed_url,
 }
 
 
