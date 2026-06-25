@@ -52,13 +52,13 @@ classification:
     - "progress issue"
     - "course progress problem"
     - "program progress not updating"
-    - "event progress stuck"
+    - "program progress not updating"
     - "certificate not generated"
     - "certificate not issued"
     - "progress not updating"
     - "resource not completing"
 
-entry_node: pick_content_type
+entry_node: pick_course_from_list
 
 imports:
   - _terminal
@@ -69,20 +69,7 @@ imports:
       cf_flow_id:      COURSE_PROGRESS_ISSUE
 
 nodes:
-  # ===========================================================================
-  # STEP 1 — Ask user: Course / Program, or Event?
-  # ===========================================================================
-  - id: pick_content_type
-    type: message
-    prompt:
-      text: "Are you facing the issue with a **Course / Program**, or an **Event**?"
-    quick_replies:
-      - { id: COURSE_PROGRAM, label: "📚 Course / Program" }
-      - { id: EVENT,          label: "📅 Event" }
-    disable_input: true
-    on_reply:
-      COURSE_PROGRAM: pick_course_from_list
-      EVENT:          pick_event_from_list
+
 
   # ---------------------------------------------------------------------------
   # Picker A — Courses & Programs (same enrollment list API, no filter needed)
@@ -143,65 +130,7 @@ nodes:
     next: branch_on_certificate_issued
 
 
-  # ---------------------------------------------------------------------------
-  # Picker B — Events (from /api/user/private/v1/events/list/{user_id})
-  # Same API pattern as karma_points_issue.yaml → ev_fetch_events_list
-  # ---------------------------------------------------------------------------
-  - id: pick_event_from_list
-    type: collect
-    prompt:
-      text: "Kindly search and select the relevant **Event** for which you are facing the progress issue:"
-    field:
-      name: collected.course_id
-      type: select
-    dynamic_options:
-      source: api
-      integration: karmayogi
-      request:
-        method: GET
-        url: "/api/user/private/v1/events/list/{{ ctx.user_id_hash }}"
-      response_mapping:
-        list_path:   "$.events"
-        id_field:    contentId
-        label_field: event.name
-        extra_fields:
-          - { from: event.name,  to: collected.course_name }
-          - { from: status,      to: collected.enrollment_status,  transform: enrollment_status_to_int }
-          - { from: completedOn, to: collected.completed_on_iso,   transform: unix_ms_to_iso }
-      search:     { enabled: true, placeholder: "Search your enrolled events..." }
-      pagination: { enabled: true, page_size: 10 }
-      cache_ttl:  300
-    next: branch_event_progress
 
-
-  # ---------------------------------------------------------------------------
-  # Event progress guidance — shown after pick_event_from_list.
-  # Events do not have a certificate flow; route directly to progress guidance.
-  # The picker (pick_event_from_list) already captures event name + status via
-  # extra_fields, so no additional API call is needed here.
-  # ---------------------------------------------------------------------------
-  - id: branch_event_progress
-    type: resolution
-    prompt:
-      text: |
-        We have retrieved the details for your selected event **{{ ctx.collected.course_name }}**.
-
-        Please follow the steps below to ensure your event progress is recorded:
-    steps:
-      - "Ensure you attended the event session **live** (on-time participation is required for progress to be recorded)"
-      - "Go to **Profile** → **My Learning** → **Events** tab"
-      - "Locate the event and check whether it shows as **Completed**"
-      - "If still showing In-Progress, please wait up to **24 hours** for the system to sync and update your progress"
-    follow_up:
-      text: "Has your event progress been updated?"
-      quick_replies:
-        - { id: YES,     label: "✅ Yes, progress updated" }
-        - { id: NO,      label: "❌ No, still not updating" }
-        - { id: PENDING, label: "🕐 I'll check and come back" }
-    on_reply:
-      YES:     progress_updated_end
-      NO:      progress_auto_ticket
-      PENDING: progress_pending_end
 
 
 
@@ -487,7 +416,7 @@ nodes:
         content_do_id:  "{{ ctx.collected.content_do_id }}"
       priority_override: P3
     on_complete: confirm_ticket
-    on_restart: pick_content_type
+    on_restart: pick_course_from_list
     # NOTE: confirm_ticket is provided by the imported _zoho_ticket fragment.
     # It POSTs to Zoho Desk → maps $.ticketNumber → collected.ticket_id
     # → routes to ticket_confirmation which displays: "✅ Ticket #XXXXX raised."
@@ -903,7 +832,7 @@ nodes:
         Description: include user_id, course_name, course_id, content_do_id, and user_email.
       priority_override: P3
     on_complete: assessment_limit_ticket_confirm
-    on_restart: pick_content_type
+    on_restart: pick_course_from_list
 
   - id: assessment_limit_ticket_confirm
     type: message
@@ -939,7 +868,7 @@ nodes:
           error_description, and user_email.
       priority_override: P3
     on_complete: assessment_other_error_ticket_confirm
-    on_restart: pick_content_type
+    on_restart: pick_course_from_list
 
   - id: assessment_other_error_ticket_confirm
     type: message
@@ -1125,7 +1054,7 @@ nodes:
         content_do_id:  "{{ ctx.collected.content_do_id }}"
       priority_override: P3
     on_complete: confirm_ticket
-    on_restart: pick_content_type
+    on_restart: pick_course_from_list
 
   # Generic API error fallback — transient errors only; no ticket escalation here.
   # The user can retry by selecting a different content or restarting the flow.
