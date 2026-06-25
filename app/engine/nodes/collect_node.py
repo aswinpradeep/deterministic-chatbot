@@ -190,15 +190,18 @@ class CollectNode(NodeHandler):
                 if not items:
                     empty_msg = dynamic_options.get("empty_message", "No results found.")
                     activities.append(Activity.markdown(empty_msg).model_dump(exclude_none=True))
-                    on_empty_rt = cfg.get("on_empty") or dynamic_options.get("on_empty")
-                    if on_empty_rt:
-                        return {
-                            "pending_activities": state.pending_activities + activities,
-                            "current_node": cfg["id"],
-                            "status": FlowStatus.ACTIVE,
-                            "collected": {**state.collected,
-                                          (field_cfg["name"].removeprefix("collected.") if field_cfg else "_empty"): None},
-                        }
+                    # Always stop — never render an empty picker regardless of on_empty.
+                    # When on_empty IS set, the conditional edge (registered at compile time)
+                    # routes to the empty-state node because field_key is None in collected.
+                    # When on_empty is NOT set, the static edge to next runs on the next user
+                    # turn — field is None, so downstream nodes should guard against that.
+                    return {
+                        "pending_activities": state.pending_activities + activities,
+                        "current_node": cfg["id"],
+                        "status": FlowStatus.ACTIVE,
+                        "collected": {**state.collected,
+                                      (field_cfg["name"].removeprefix("collected.") if field_cfg else "_empty"): None},
+                    }
                 other_opt_cfg = cfg.get("other_option")
                 other_option = None
                 if other_opt_cfg:

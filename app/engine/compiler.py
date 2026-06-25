@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -126,9 +127,23 @@ class FlowCompiler:
                     f"could not read fragment {frag_path}: {e}"
                 ) from e
 
-            # Simple string substitution: {{ params.KEY }} → value
+            # String substitution: {{ params.KEY }} → value
+            # Also handles {{ params.KEY | default("fallback") }} — use provided value
+            # when the key is present, or the fallback when it is absent.
             for key, val in params.items():
                 raw_text = raw_text.replace(f"{{{{ params.{key} }}}}", str(val))
+                raw_text = re.sub(
+                    rf'\{{\{{\s*params\.{re.escape(key)}\s*\|\s*default\([^)]*\)\s*\}}\}}',
+                    str(val),
+                    raw_text,
+                )
+            # Replace any remaining {{ params.KEY | default("fallback") }} whose key
+            # was NOT provided by the caller — substitute with the declared default.
+            raw_text = re.sub(
+                r'\{\{\s*params\.\w+\s*\|\s*default\((["\']?)([^)]*)\1\)\s*\}\}',
+                lambda m: m.group(2),
+                raw_text,
+            )
 
             try:
                 frag_data = yaml.load(raw_text)

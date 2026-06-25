@@ -65,6 +65,7 @@ imports:
       field_name:    c1_course_id
       field_prefix:  "c1_"
       next:          c1_branch_enrollment
+      on_empty:      no_courses_found_cert
 
 nodes:
 
@@ -95,7 +96,7 @@ nodes:
   # C1: Certificate Not Generated / Not Received (UC-03)
   # ===========================================================================
 
-  # c1_pick_course — injected from _shared/_enrollment_picker.yaml
+  # c1_pick_course — injected from _shared/_enrollment_picker.yaml (on_empty: no_courses_found_cert)
 
   # c1_check_enrollment removed — all fields now captured by c1_pick_course extra_fields
 
@@ -461,3 +462,12 @@ nodes:
       priority_override: P4
     on_complete: confirm_ticket
     on_restart: ask_certificate_issue
+
+  - id: no_courses_found_cert
+    type: message
+    prompt:
+      text: |
+        You do not have any enrolled courses or programs with In-Progress or Completed status.
+
+        Please enrol in a course on the iGOT Karmayogi portal and try again.
+    next: satisfied

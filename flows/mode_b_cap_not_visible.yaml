@@ -68,6 +68,7 @@ imports:
       field_name:    course_id
       field_prefix:  ""
       next:          branch_on_cap_limit_certificate
+      on_empty:      no_enrolled_for_cap_limit
   - _terminal
 
 
@@ -86,6 +87,8 @@ nodes:
     on_reply:
       save_to: collected.cap_issue_type
       next: branch_from_cap_issue_type
+
+  # pick_cap_for_limit — injected from _shared/_enrollment_picker.yaml (on_empty: no_enrolled_for_cap_limit)
 
   - id: branch_from_cap_issue_type
     type: branch
@@ -1239,4 +1242,13 @@ nodes:
         No Comprehensive Assessment Programs (CAPs) are currently assigned to you.
 
         If you believe you should have been assigned a CAP, please contact your Nodal Officer for assistance.
+    next: satisfied
+
+  - id: no_enrolled_for_cap_limit
+    type: message
+    prompt:
+      text: |
+        You do not have any enrolled courses or programs at the moment.
+
+        Please enrol in a course on the iGOT Karmayogi portal and try again.
     next: satisfied
