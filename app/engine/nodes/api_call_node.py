@@ -1451,27 +1451,31 @@ def _flatten_cadre_services(value: Any) -> list[dict]:
     return services
 
 
-def _extract_event_time_spent(event: Any) -> float:
+def _extract_event_time_spent(event: Any) -> float | None:
     """Extract time spent (duration) from an event's progress details.
-    
+
     Checks both top-level 'lrcProgressDetails' and 'userEventConsumption[0].progressdetails'.
     Parses the JSON string and extracts the 'duration' field.
+    Returns None when the field is absent so branch rules can distinguish
+    "no data available" from "truly zero time spent".
     """
     if not isinstance(event, dict):
-        return 0.0
+        return None
 
-    def parse_duration(details_str: Any) -> float:
+    def parse_duration(details_str: Any) -> float | None:
         if isinstance(details_str, str):
             try:
                 import json
                 data = json.loads(details_str)
-                return float(data.get("duration", 0.0))
+                val = data.get("duration")
+                if val is not None:
+                    return float(val)
             except (json.JSONDecodeError, TypeError, ValueError):
                 pass
-        return 0.0
+        return None
 
     dur1 = parse_duration(event.get("lrcProgressDetails"))
-    if dur1 > 0:
+    if dur1 is not None:
         return dur1
 
     consumptions = event.get("userEventConsumption", [])
@@ -1479,10 +1483,10 @@ def _extract_event_time_spent(event: Any) -> float:
         first = consumptions[0]
         if isinstance(first, dict):
             dur2 = parse_duration(first.get("progressdetails"))
-            if dur2 > 0:
+            if dur2 is not None:
                 return dur2
-                
-    return 0.0
+
+    return None
 
 
 def _is_youtube_embed_url(url: Any) -> bool:
@@ -1491,6 +1495,8 @@ def _is_youtube_embed_url(url: Any) -> bool:
         return False
     import re
     return bool(re.search(r"youtube\.com/embed/", url, re.IGNORECASE))
+
+
 def _filter_orgs_by_parent(orgs: Any, parent_id: Any) -> list[dict]:
     """Filter list of organizations by parent ministry or state ID."""
     if not isinstance(orgs, list):

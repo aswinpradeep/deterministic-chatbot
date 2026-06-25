@@ -693,6 +693,7 @@ Same fields as `markdown` but render as plain text — no Markdown parsing.
   "picker_id": "course_picker",
   "placeholder": "Search your course...",
   "search_enabled": true,
+  "total_items": 42,
   "items": [
     {
       "id": "do_1141985687873863681190",
@@ -719,7 +720,8 @@ Same fields as `markdown` but render as plain text — no Markdown parsing.
 | `picker_id` | string | ✅ | Send back in `pick_item.picker_id` |
 | `placeholder` | string | ✅ | Search box hint text |
 | `search_enabled` | bool | ✅ | Show search/filter input if true |
-| `items` | array | ✅ | List of selectable items |
+| `total_items` | integer | ✅ | Total number of items available (before pagination). Use this to show a count badge or pre-emptively detect an empty state. Always ≥ 0; `items[]` may be a page-sized slice. |
+| `items` | array | ✅ | List of selectable items (may be paginated) |
 | `items[].id` | string | ✅ | Internal identifier — send back as `item_id` |
 | `items[].label` | string | ✅ | Primary display text |
 | `items[].meta` | string \| null | ❌ | Sub-label (status, date, progress) |
@@ -728,7 +730,7 @@ Same fields as `markdown` but render as plain text — no Markdown parsing.
 | `other_option.label` | string | ✅ if present | Display text for the "other" option |
 | `disable_input` | bool | ❌ (default true) | Almost always true — user must pick from the list |
 
-**Empty picker:** If `items` is empty and `other_option` is set, only the "other" option is shown. The flow falls back gracefully.
+**Empty state:** When a dynamic picker would have zero items, the server routes to a message node instead — you will **never** receive a `picker` activity with `items: []`. The `total_items` field therefore always reflects the count of a non-empty list. You do not need to handle the zero-item picker case in the UI.
 
 **On selection → send `pick_item`:**
 ```json
