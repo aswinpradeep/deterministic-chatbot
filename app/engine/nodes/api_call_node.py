@@ -1491,6 +1491,50 @@ def _is_youtube_embed_url(url: Any) -> bool:
         return False
     import re
     return bool(re.search(r"youtube\.com/embed/", url, re.IGNORECASE))
+def _filter_orgs_by_parent(orgs: Any, parent_id: Any) -> list[dict]:
+    """Filter list of organizations by parent ministry or state ID."""
+    if not isinstance(orgs, list):
+        return []
+    filtered = []
+    for org in orgs:
+        if not isinstance(org, dict):
+            continue
+        # Check multiple possible parent ID field names for flexibility
+        if (org.get("ministryOrStateId") == parent_id or 
+            org.get("parentOrgId") == parent_id or
+            org.get("levelZeroOrgId") == parent_id or
+            org.get("rootOrgId") == parent_id or
+            org.get("parentId") == parent_id):
+            filtered.append(org)
+    # Always append the static "Others" option to the end of the filtered list
+    filtered.append({
+        "identifier": "other_org",
+        "orgName": "Others"
+    })
+    return filtered
+
+
+def _merge_lists(value: Any, existing_list: Any) -> list:
+    """Merge two lists of dicts."""
+    if not isinstance(existing_list, list):
+        existing_list = []
+    if isinstance(value, list):
+        return existing_list + value
+    return existing_list
+
+
+def _append_others_org(orgs: Any) -> list[dict]:
+    """Append the 'Others' option to the end of the organizations list."""
+    if not isinstance(orgs, list):
+        filtered = []
+    else:
+        filtered = list(orgs)
+    
+    filtered.append({
+        "identifier": "other_org",
+        "orgName": "Others"
+    })
+    return filtered
 
 
 # Registry of named transforms usable in YAML response_mapping `transform:` field.
@@ -1562,6 +1606,9 @@ _TRANSFORMS: dict[str, Any] = {
     # Event related issues SOP transforms
     "extract_event_time_spent":      _extract_event_time_spent,
     "is_youtube_embed_url":          _is_youtube_embed_url,
+    "filter_orgs_by_parent":         _filter_orgs_by_parent,
+    "append_others_org":             _append_others_org,
+    "merge_lists":                   _merge_lists,
 }
 
 
