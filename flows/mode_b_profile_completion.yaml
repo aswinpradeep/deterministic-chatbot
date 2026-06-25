@@ -382,26 +382,11 @@ nodes:
     prompt:
       text: "What best describes your situation with **Email ID / Mobile Number** update?"
     quick_replies:
-      - { id: guide,            label: "📋 I need help with the update steps" }
       - { id: no_otp,           label: "❌ Not receiving OTP" }
       - { id: multiple_account, label: "👥 Multiple account issue / Invalid domain" }
     on_reply:
-      guide:            email_mobile_guide_steps
       no_otp:           fetch_mdo_for_email
       multiple_account: email_mobile_multiple_account
-
-  - id: email_mobile_guide_steps
-    type: resolution
-    prompt:
-      text: |
-        To update your **Email ID or Mobile Number**, OTP verification is mandatory.
-        Follow these steps:
-    steps:
-      - "Go to **View Profile → Edit Profile** and locate the Email or Mobile field."
-      - "Enter the new Email ID / Mobile Number."
-      - "Click **Send OTP** — ensure you have access to your current registered email/phone."
-      - "Enter the OTP received and click **Verify & Save**."
-    next: satisfied
 
   - id: email_mobile_multiple_account
     type: message
@@ -1646,6 +1631,7 @@ nodes:
       - "Click the **three dots (⋮)** at the top-right of the profile section."
       - "Click **Edit Cover Photo**."
       - "Select **Change Cover Photo** and choose the photo from your device."
+      - "Cover photo requirements: ≤ **200 KB** and ≤ **1200 × 300 pixels**."
       - "Click **Apply Changes**."
     next: satisfied
 
@@ -1759,7 +1745,9 @@ nodes:
       text: "Your **cover photo** is missing."
     steps:
       - "Click **View Profile** → **three dots (⋮)** → **Edit Cover Photo**."
-      - "Select **Change Cover Photo** → choose file → **Apply Changes**."
+      - "Select **Change Cover Photo** → choose file."
+      - "Requirements: ≤ **200 KB**, ≤ **1200 × 300 pixels**."
+      - "Click **Apply Changes**."
     follow_up:
       text: "Done?"
       quick_replies:
