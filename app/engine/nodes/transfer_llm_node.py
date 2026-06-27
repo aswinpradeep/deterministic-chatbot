@@ -67,7 +67,7 @@ class TransferLLMNode(NodeHandler):
     def build(self, cfg: dict[str, Any]) -> Callable[[ConversationState], dict]:
         self._validate(cfg)
 
-        auto_raise: bool = bool(cfg.get("auto_raise", False))
+        auto_raise = cfg.get("auto_raise", False)
         llm_context_cfg = cfg.get("llm_context", {})
         llm_directives = cfg["llm_directives"]
 
@@ -109,14 +109,16 @@ class TransferLLMNode(NodeHandler):
                     pass  # keep template draft
 
             if auto_raise:
-                # Mode B auto-raise: show brief acknowledgement, proceed to on_complete
-                activities = [
-                    Activity.markdown(
-                        "📋 I wasn't able to resolve your issue through the self-service steps.\n\n"
-                        "Creating a support ticket for the L2 team now — "
-                        "they will reach out within **2 business days**."
-                    ).model_dump(exclude_none=True),
-                ]
+                # Mode B auto-raise: skip confirmation
+                activities = []
+                if auto_raise != "silent":
+                    activities = [
+                        Activity.markdown(
+                            "📋 I wasn't able to resolve your issue through the self-service steps.\n\n"
+                            "Creating a support ticket for the L2 team now — "
+                            "they will reach out within **2 business days**."
+                        ).model_dump(exclude_none=True),
+                    ]
                 return {
                     "ticket_draft": draft.model_dump(),
                     "pending_activities": state.pending_activities + activities,
@@ -124,7 +126,6 @@ class TransferLLMNode(NodeHandler):
                     "status": FlowStatus.ACTIVE,
                     "llm_calls_this_session": state.llm_calls_this_session + (1 if llm_used else 0),
                 }
-
 
             # Standard mode: show draft + ask for confirmation
             summary_msg = (
@@ -298,8 +299,13 @@ def _build_template_draft(
             continue
         if k in _HEADER_FIELDS or k in _SKIP_FIELDS:
             continue
+        
+        val_str = str(v)
+        if len(val_str) > 500:
+            val_str = val_str[:500] + "... [truncated]"
+
         label = _READABLE_KEYS.get(k, k.replace("_", " ").title())
-        field_items.append((label, v))
+        field_items.append((label, val_str))
 
     flow_label = (state.flow_id or "").replace("_", " ").title()
     subject = directives.get("subject_hint") or _derive_subject(flow_label, collected)
@@ -370,12 +376,12 @@ def _fallback_to_template(
     state: ConversationState,
     cfg: dict[str, Any],
     reason: str,
-    auto_raise: bool = False,
+    auto_raise: Any = False,
 ) -> dict[str, Any]:
     """Build a deterministic template-based ticket summary instead of calling LLM.
 
     This is the safety net: escalation never blocks on LLM availability.
-    When auto_raise=True, skips user confirmation and proceeds directly to on_complete.
+    When auto_raise=True (or 'silent'), skips user confirmation and proceeds directly to on_complete.
     """
     last_user_turns = [
         getattr(m, "content", "")
@@ -390,7 +396,10 @@ def _fallback_to_template(
         "Collected data:",
     ]
     for k, v in (state.collected or {}).items():
-        description_parts.append(f"  - {k}: {v}")
+        val_str = str(v)
+        if len(val_str) > 500:
+            val_str = val_str[:500] + "... [truncated]"
+        description_parts.append(f"  - {k}: {val_str}")
     description_parts.append("")
     description_parts.append(f"[Auto-summary; reason: {reason}]")
 
@@ -405,12 +414,14 @@ def _fallback_to_template(
 
     if auto_raise:
         # No user confirmation — just inform and proceed
-        activities = [
-            Activity.markdown(
-                "📋 I wasn't able to resolve your issue through the self-service steps.\n\n"
-                "Creating a support ticket now — the L2 team will reach out within **2 business days**."
-            ).model_dump(exclude_none=True),
-        ]
+        activities = []
+        if auto_raise != "silent":
+            activities = [
+                Activity.markdown(
+                    "📋 I wasn't able to resolve your issue through the self-service steps.\n\n"
+                    "Creating a support ticket now — the L2 team will reach out within **2 business days**."
+                ).model_dump(exclude_none=True),
+            ]
         return {
             "ticket_draft": draft.model_dump(),
             "pending_activities": state.pending_activities + activities,

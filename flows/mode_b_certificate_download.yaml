@@ -291,10 +291,31 @@ nodes:
     disable_input: true
     on_reply:
       yes: satisfied
-      no:  c1_auto_ticket
+      no:  c1_step1_ticket
+
+  - id: c1_step1_ticket
+    type: message
+    prompt:
+      text: |
+        **Issue Identified:** Certificate Not Generated
+
+        **Summary of Request:**
+        You reported that your certificate has not been generated despite following the self-service steps. You would like us to investigate this issue.
+        
+        • **Course:** {{ ctx.collected.c1_course_name or 'Selected course' }}
+
+        Please review the details above and confirm whether they are correct.
+    quick_replies:
+      - { id: confirm, label: "✅ Confirm" }
+      - { id: cancel,  label: "❌ Cancel" }
+    disable_input: true
+    on_reply:
+      confirm: c1_auto_ticket
+      cancel:  satisfied
 
   - id: c1_auto_ticket
     type: transfer_llm
+    auto_raise: silent
     llm_context:
       include_messages:  true
       include_collected: true
@@ -446,10 +467,31 @@ nodes:
         - { id: no,  label: "❌ Still not working" }
     on_reply:
       yes: satisfied
-      no:  generic_auto_ticket
+      no:  generic_step1_ticket
+
+  - id: generic_step1_ticket
+    type: message
+    prompt:
+      text: |
+        **Issue Identified:** Certificate Issue
+
+        **Summary of Request:**
+        You reported that your certificate issue could not be resolved through standard troubleshooting steps. You would like us to investigate this issue further.
+        
+        • **Course:** {{ ctx.collected.c1_course_name or 'Selected course' }}
+
+        Please review the details above and confirm whether they are correct.
+    quick_replies:
+      - { id: confirm, label: "✅ Confirm" }
+      - { id: cancel,  label: "❌ Cancel" }
+    disable_input: true
+    on_reply:
+      confirm: generic_auto_ticket
+      cancel:  satisfied
 
   - id: generic_auto_ticket
     type: transfer_llm
+    auto_raise: silent
     llm_context:
       include_messages:  true
       include_collected: true

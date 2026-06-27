@@ -290,35 +290,39 @@ nodes:
     type: message
     prompt:
       text: |
-        Since YouTube is not restricted and the resource configuration appears correct, this may require a deeper investigation.
+        **Summary of Request:**
+        You reported that the YouTube resource is not opening despite YouTube not being restricted on your network. You would like us to investigate this issue further.
+        
+        • **Course:** {{ ctx.collected.course_name }}
+        • **Resource:** {{ ctx.collected.resource_name }}
 
-        Shall I create a support ticket for you? We will include the following details:
-        - **Course:** {{ ctx.collected.course_name }}
-        - **Resource:** {{ ctx.collected.resource_name }}
+        Please review the details above and confirm whether they are correct.
     quick_replies:
-      - { id: yes, label: "✅ Yes, create a ticket" }
-      - { id: no,  label: "❌ No, I'll check again later" }
+      - { id: confirm, label: "✅ Confirm" }
+      - { id: cancel,  label: "❌ Cancel" }
     disable_input: true
     on_reply:
-      yes: resource_auto_ticket
-      no:  satisfied
+      confirm: resource_auto_ticket
+      cancel:  satisfied
 
   - id: youtube_config_issue
     type: message
     prompt:
       text: |
-        It appears that there may be a configuration issue in the resource. This may require a deeper investigation.
+        **Summary of Request:**
+        You reported that the YouTube resource is not opening due to a possible configuration issue. You would like us to investigate this issue further.
+        
+        • **Course:** {{ ctx.collected.course_name }}
+        • **Resource:** {{ ctx.collected.resource_name }}
 
-        Shall I create a support ticket for you? We will include the following details:
-        - **Course:** {{ ctx.collected.course_name }}
-        - **Resource:** {{ ctx.collected.resource_name }}
+        Please review the details above and confirm whether they are correct.
     quick_replies:
-      - { id: yes, label: "✅ Yes, create a ticket" }
-      - { id: no,  label: "❌ No, I'll check again later" }
+      - { id: confirm, label: "✅ Confirm" }
+      - { id: cancel,  label: "❌ Cancel" }
     disable_input: true
     on_reply:
-      yes: resource_auto_ticket
-      no:  satisfied
+      confirm: resource_auto_ticket
+      cancel:  satisfied
 
   # Fallback for API failures
   - id: api_error_fallback
@@ -335,18 +339,20 @@ nodes:
     type: message
     prompt:
       text: |
-        The resource **{{ ctx.collected.resource_name }}** appears to be in **SCORM format**. This may require a deeper investigation.
+        **Summary of Request:**
+        You reported that a SCORM format resource is not opening. You would like us to investigate this issue further.
+        
+        • **Course:** {{ ctx.collected.course_name }}
+        • **Resource:** {{ ctx.collected.resource_name }}
 
-        Shall I create a support ticket for you? We will include the following details:
-        - **Course:** {{ ctx.collected.course_name }}
-        - **Resource:** {{ ctx.collected.resource_name }}
+        Please review the details above and confirm whether they are correct.
     quick_replies:
-      - { id: yes, label: "✅ Yes, create a ticket" }
-      - { id: no,  label: "❌ No, I'll check again later" }
+      - { id: confirm, label: "✅ Confirm" }
+      - { id: cancel,  label: "❌ Cancel" }
     disable_input: true
     on_reply:
-      yes: resource_auto_ticket
-      no:  satisfied
+      confirm: resource_auto_ticket
+      cancel:  satisfied
 
   - id: other_format_issue
     type: message
@@ -360,24 +366,27 @@ nodes:
         {% elif ctx.collected.resource_mime_type == 'application/vnd.sunbird.questionset' %}
         {% set r_type = "an assessment" %}
         {% endif %}
-        The resource **{{ ctx.collected.resource_name }}** appears to be {{ r_type }}. This may require a deeper investigation.
+        **Summary of Request:**
+        You reported that {{ r_type }} is not opening. You would like us to investigate this issue further.
+        
+        • **Course:** {{ ctx.collected.course_name }}
+        • **Resource:** {{ ctx.collected.resource_name }}
 
-        Shall I create a support ticket for you? We will include the following details:
-        - **Course:** {{ ctx.collected.course_name }}
-        - **Resource:** {{ ctx.collected.resource_name }}
+        Please review the details above and confirm whether they are correct.
     quick_replies:
-      - { id: yes, label: "✅ Yes, create a ticket" }
-      - { id: no,  label: "❌ No, I'll check again later" }
+      - { id: confirm, label: "✅ Confirm" }
+      - { id: cancel,  label: "❌ Cancel" }
     disable_input: true
     on_reply:
-      yes: resource_auto_ticket
-      no:  satisfied
+      confirm: resource_auto_ticket
+      cancel:  satisfied
 
   # ===========================================================================
   # Escalation
   # ===========================================================================
   - id: resource_auto_ticket
     type: transfer_llm
+    auto_raise: silent
     llm_context:
       include_messages:  true
       include_collected: true

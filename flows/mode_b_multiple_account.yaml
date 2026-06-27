@@ -657,20 +657,21 @@ nodes:
         - The account currently associated with **{{ ctx.collected.new_identifier }}** will be **deactivated**.
         - Access to that account will **no longer be available**.
 
-        Kindly review the below details and confirm whether they are correct:
+        **Summary of Request:**
+        You reported that you would like to update your {{ 'Email ID' if ctx.collected.update_type == 'EMAIL' else 'Mobile Number' }}. You would like us to proceed with this change and deactivate the conflicting account.
 
-        {{ '📧' if ctx.collected.update_type == 'EMAIL' else '📱' }} **Current {{ 'Email ID' if ctx.collected.update_type == 'EMAIL' else 'Mobile Number' }}:** {{ (ctx.collected.current_email or "(your registered identifier)") if ctx.collected.update_type == 'EMAIL' else (ctx.collected.current_phone or "(your registered identifier)") }}
-        {{ '📧' if ctx.collected.update_type == 'EMAIL' else '📱' }} **{{ 'Email ID' if ctx.collected.update_type == 'EMAIL' else 'Mobile Number' }} to be Updated:** {{ ctx.collected.new_identifier }}
+        • **Current {{ 'Email ID' if ctx.collected.update_type == 'EMAIL' else 'Mobile Number' }}:** {{ (ctx.collected.current_email or "(your registered identifier)") if ctx.collected.update_type == 'EMAIL' else (ctx.collected.current_phone or "(your registered identifier)") }}
+        • **{{ 'Email ID' if ctx.collected.update_type == 'EMAIL' else 'Mobile Number' }} to be Updated:** {{ ctx.collected.new_identifier }}
 
-        Please confirm whether you would like us to proceed with this change.
+        Please review the details above and confirm whether they are correct.
     quick_replies:
-      - { id: yes, label: "✅ Yes, proceed" }
-      - { id: no, label: "❌ No, start over" }
+      - { id: confirm, label: "✅ Confirm" }
+      - { id: cancel, label: "❌ Cancel" }
     disable_input: true
     on_reply:
       save_to: collected.final_confirmation
-      yes: raise_support_ticket
-      no: restart_flow
+      confirm: raise_support_ticket
+      cancel: restart_flow
 
   # Step 4.6 — User says NO at final confirmation → restart from Step 1
   - id: restart_flow
@@ -687,6 +688,7 @@ nodes:
   # ===========================================================================
   - id: raise_support_ticket
     type: transfer_llm
+    auto_raise: silent
     llm_context:
       include_messages: true
       include_collected: true

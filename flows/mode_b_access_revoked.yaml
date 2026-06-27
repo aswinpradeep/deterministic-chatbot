@@ -659,8 +659,32 @@ nodes:
       text: |
         ⚠️ **YP / SPOC Details Not Found**
 
-        We could not locate a YP or SPOC for your organization. We will raise a support ticket for further investigation — our team will reach out to assist you.
-    next: access_revoked_auto_ticket
+        We could not locate a YP or SPOC for your organization. A support ticket will be raised for further investigation — our team will reach out to assist you.
+    next: access_revoked_step1_ticket
+
+  - id: access_revoked_step1_ticket
+    type: message
+    prompt:
+      text: |
+        **Issue Identified:** Access Revoked — Support Request
+
+        **Summary of Request:**
+        You reported that you could not locate a YP or SPOC for your organization. You would like us to investigate and assist you with this access issue.
+        {% if ctx.collected.user_channel %}
+        • **Your Organisation:** {{ ctx.collected.user_channel }}
+        {% endif %}
+        {% if ctx.collected.transfer_dept_name %}
+        • **Target Organisation:** {{ ctx.collected.transfer_dept_name }}
+        {% endif %}
+
+        Please review the details above and confirm whether they are correct.
+    quick_replies:
+      - { id: confirm, label: "✅ Confirm" }
+      - { id: cancel,  label: "❌ Cancel" }
+    disable_input: true
+    on_reply:
+      confirm: access_revoked_auto_ticket
+      cancel:  satisfied
 
   # ===========================================================================
   # 5. Escalation & Terminal
@@ -676,6 +700,7 @@ nodes:
 
   - id: access_revoked_auto_ticket
     type: transfer_llm
+    auto_raise: silent
     llm_context:
       include_messages:  true
       include_collected: true
@@ -690,16 +715,9 @@ nodes:
     on_complete: confirm_ticket
     on_restart: fetch_transfer_status
 
-  - id: confirm_ticket
-    type: message
-    prompt:
-      text: |
-        ✅ Your support ticket has been successfully raised.
-
-        Our support team will review your access revoked issue and contact you shortly at **{{ ctx.collected.email }}**.
-
-        In the meantime, you can also check the steps provided in this conversation to try resolving the issue on your own.
-    next: satisfied
+  # Note: confirm_ticket (API call to Zoho) and ticket_confirmation are provided
+  # by the imported _zoho_ticket fragment. The local override has been removed
+  # so that tickets are actually created via the Zoho Desk API.
 
   - id: satisfied
     type: end
