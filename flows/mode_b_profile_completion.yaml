@@ -613,7 +613,9 @@ nodes:
     type: message
     prompt:
       text: |
-        ⚠️ We were unable to verify whether the **{{ ctx.collected.new_identifier }}** is already registered due to a temporary issue.
+        **Verification Temporarily Unavailable**
+
+        We are currently unable to verify whether the **{{ ctx.collected.new_identifier }}** is already registered due to a temporary issue.
 
         Please try again in a moment.
     quick_replies:
@@ -650,7 +652,7 @@ nodes:
     quick_replies:
       - { id: done,    label: "✅ Updated successfully" }
       - { id: no_otp,  label: "❌ Did not receive OTP" }
-      - { id: error,   label: "⚠️ Still getting an error" }
+      - { id: error,   label: "Still getting an error" }
     disable_input: true
     on_reply:
       done:   satisfied
@@ -765,7 +767,9 @@ nodes:
     type: message
     prompt:
       text: |
-        ⚠️ The {{ 'Email ID' if ctx.collected.update_type == 'EMAIL' else 'Mobile Number' }} **{{ ctx.collected.new_identifier }}** is already registered with another account.
+        **Identifier Already Registered**
+
+        The {{ 'Email ID' if ctx.collected.update_type == 'EMAIL' else 'Mobile Number' }} **{{ ctx.collected.new_identifier }}** is already registered with another account.
 
         **Details of the registered account:**
         🏢 **Organisation:** {{ ctx.collected.conflict_org_name or "Unknown" }}
@@ -777,7 +781,7 @@ nodes:
     quick_replies:
       - { id: no,       label: "❌ No, don't proceed" }
       - { id: merge,    label: "🔗 Can we merge both accounts?" }
-      - { id: proceed,  label: "⚠️ Yes, I want to proceed" }
+      - { id: proceed,  label: "➡️ Yes, I want to proceed" }
     disable_input: true
     on_reply:
       save_to: collected.conflict_decision
@@ -838,7 +842,7 @@ nodes:
     type: message
     prompt:
       text: |
-        ⚠️ Please review the following before confirming:
+        **Please review the following before confirming:**
 
         **Your current account enrollments:**
         📚 **Total Enrollments:** {{ (ctx.collected.current_inprogress or 0) + (ctx.collected.current_completed or 0) }}

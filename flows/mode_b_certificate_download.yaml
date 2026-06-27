@@ -249,7 +249,7 @@ nodes:
         10. Ensure all modules and content items display a blue tick mark.
         11. Continue until the course completion reaches **100%**.
 
-        ⚠️ SCORM resources require a stable internet connection and cannot be completed offline.
+        **Note:** SCORM resources require a stable internet connection and cannot be completed offline.
 
         Please complete all pending resources and recheck certificate availability after successful course completion.
     next: satisfied
