@@ -696,11 +696,36 @@ nodes:
         - A training plan has not yet been assigned by your MDO, or
         - There may be a sync delay — please check again after some time.
 
-        If the issue persists, please contact the **iGOT Helpdesk** at **helpdesk@igotkarmayogi.gov.in** for further assistance.
-    next: satisfied
+        Would you like us to raise a support ticket for further investigation?
+    quick_replies:
+      - { id: yes, label: "✅ Yes, please raise a ticket" }
+      - { id: no,  label: "❌ No, thank you" }
+    disable_input: true
+    on_reply:
+      yes: apar_confirm_ticket
+      no:  satisfied
+
+  - id: apar_confirm_ticket
+    type: message
+    prompt:
+      text: |
+        **Issue Identified:** APAR Training Plan Not Visible
+
+        **Summary of Request:**
+        You reported that your APAR training plan / courses are not visible on the platform. You would like us to investigate this issue further.
+
+        Please review the details above and confirm whether they are correct.
+    quick_replies:
+      - { id: confirm, label: "✅ Confirm" }
+      - { id: cancel,  label: "❌ Cancel" }
+    disable_input: true
+    on_reply:
+      confirm: raise_ticket
+      cancel:  satisfied
 
   - id: raise_ticket
     type: transfer_llm
+    auto_raise: silent
     llm_context:
       include_messages:  true
       include_collected: true

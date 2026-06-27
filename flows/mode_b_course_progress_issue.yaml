@@ -372,18 +372,21 @@ nodes:
     type: message
     prompt:
       text: |
-        Upon checking, we found some **technical issues** affecting one or more resources under the selected **Course / Program / Event**.
+        **Issue Identified:** Course / Program / Event Progress — Technical Issue Detected
 
-        We can raise a support ticket for further investigation.
+        **Summary of Request:**
+        You reported that a technical issue has been detected affecting one or more resources where the enrollment status and admin content state are mismatched. You would like us to investigate this issue.
+        
+        • **Course / Program / Event:** {{ ctx.collected.course_name or 'Selected content' }}
 
-        Kindly confirm whether you would like us to proceed.
+        Please review the details above and confirm whether they are correct.
     quick_replies:
-      - { id: yes, label: "✅ Yes, please raise a ticket" }
-      - { id: no,  label: "❌ No, thank you" }
+      - { id: confirm, label: "✅ Confirm" }
+      - { id: cancel,  label: "❌ Cancel" }
     disable_input: true
     on_reply:
-      yes: technical_issue_auto_ticket
-      no:  technical_issue_declined
+      confirm: technical_issue_auto_ticket
+      cancel:  technical_issue_declined
 
   # User declined — close the conversation politely (SOP 6.3)
   - id: technical_issue_declined
@@ -396,6 +399,7 @@ nodes:
   # Collect email before raising ticket for technical issue
   - id: technical_issue_auto_ticket
     type: transfer_llm
+    auto_raise: silent
     llm_context:
       include_messages:  true
       include_collected: true
@@ -821,6 +825,7 @@ nodes:
 
   - id: assessment_limit_auto_ticket
     type: transfer_llm
+    auto_raise: silent
     llm_context:
       include_messages:  true
       include_collected: true
@@ -856,6 +861,7 @@ nodes:
 
   - id: assessment_other_error_ticket
     type: transfer_llm
+    auto_raise: silent
     llm_context:
       include_messages:  true
       include_collected: true
@@ -976,18 +982,21 @@ nodes:
     type: message
     prompt:
       text: |
-        Upon revalidation, we found some **technical issues** affecting your progress for **{{ ctx.collected.course_name }}**.
+        **Issue Identified:** Course / Program / Event Progress — Technical Issue (Revalidated)
 
-        We can raise a support ticket for further investigation.
+        **Summary of Request:**
+        You reported that upon revalidation, a technical issue has been confirmed affecting your progress. You would like us to investigate this issue where the enrollment and admin content states are still mismatched.
+        
+        • **Course / Program / Event:** {{ ctx.collected.course_name or 'Selected content' }}
 
-        Kindly confirm whether you would like us to proceed.
+        Please review the details above and confirm whether they are correct.
     quick_replies:
-      - { id: yes, label: "✅ Yes, please raise a ticket" }
-      - { id: no,  label: "❌ No, thank you" }
+      - { id: confirm, label: "✅ Confirm" }
+      - { id: cancel,  label: "❌ Cancel" }
     disable_input: true
     on_reply:
-      yes: technical_issue_auto_ticket
-      no:  technical_issue_declined
+      confirm: technical_issue_auto_ticket
+      cancel:  technical_issue_declined
 
   # Remark 2 — Scenario B: Pending resources found (Section 13.2.3)
   - id: remark_pending_resources_found
@@ -1026,13 +1035,34 @@ nodes:
     disable_input: true
     on_reply:
       yes: satisfied
-      no:  progress_auto_ticket
+      no:  progress_step1_ticket
+
+  - id: progress_step1_ticket
+    type: message
+    prompt:
+      text: |
+        **Issue Identified:** Course / Program / Event Progress Issue
+
+        **Summary of Request:**
+        You reported that your progress issue could not be resolved through self-service steps. You would like us to investigate this issue further.
+        
+        • **Course / Program / Event:** {{ ctx.collected.course_name or 'Selected content' }}
+
+        Please review the details above and confirm whether they are correct.
+    quick_replies:
+      - { id: confirm, label: "✅ Confirm" }
+      - { id: cancel,  label: "❌ Cancel" }
+    disable_input: true
+    on_reply:
+      confirm: progress_auto_ticket
+      cancel:  satisfied
 
   # ===========================================================================
   # Escalation — collect email then auto-generate ticket
   # ===========================================================================
   - id: progress_auto_ticket
     type: transfer_llm
+    auto_raise: silent
     llm_context:
       include_messages:  true
       include_collected: true

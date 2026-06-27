@@ -357,20 +357,26 @@ nodes:
     type: message
     prompt:
       text: |
-        Here are the details I'll submit for adding a new designation:
+        **Issue Identified:** Request to Add New Designation
+
+        **Summary of Request:**
+        You reported that your designation is not verified. You would like to request verification for the designation under the organisation.
+
         • **Organisation:** {{ ctx.collected.designation_org_name }}
         • **Designation (full form):** {{ ctx.collected.designation_requested }}
 
-        Shall I raise this request?
+        Please review the details above and confirm whether they are correct.
     quick_replies:
-      - { id: confirm, label: "✅ Yes, raise ticket" }
-      - { id: retry,   label: "🔄 Try a different designation" }
+      - { id: confirm, label: "✅ Confirm" }
+      - { id: edit,    label: "✏️ Edit Details" }
+    disable_input: true
     on_reply:
       confirm: raise_designation_ticket
-      retry:   designation_search_and_pick
+      edit:    designation_no_match_collect_org
 
   - id: raise_designation_ticket
     type: transfer_llm
+    auto_raise: silent
     llm_context:
       include_messages: true
       include_collected: true
@@ -869,6 +875,7 @@ nodes:
 
   - id: ma_raise_support_ticket
     type: transfer_llm
+    auto_raise: silent
     llm_context:
       include_messages:  true
       include_collected: true
@@ -1083,19 +1090,25 @@ nodes:
     type: message
     prompt:
       text: |
-        We were unable to load the language list at this time.
+        **Issue Identified:** Mother Tongue Update Request
 
+        **Summary of Request:**
+        You reported that the language list is unavailable. You would like us to raise a support request to add or update your mother tongue in the iGOT system.
+
+        Please review the details above and confirm whether they are correct.
         I can raise a support request to get your mother tongue added .
         Shall I submit this request?
     quick_replies:
-      - { id: yes, label: "✅ Yes, raise request" }
-      - { id: no,  label: "❌ No, not now" }
+      - { id: confirm, label: "✅ Confirm" }
+      - { id: cancel,  label: "❌ Cancel" }
+    disable_input: true
     on_reply:
-      yes: raise_mother_tongue_ticket
-      no:  satisfied
+      confirm: raise_mother_tongue_ticket
+      cancel:  satisfied
 
   - id: raise_mother_tongue_ticket
     type: transfer_llm
+    auto_raise: silent
     llm_context:
       include_messages: true
       include_collected: true
@@ -1458,20 +1471,26 @@ nodes:
     type: message
     prompt:
       text: |
-        I'll raise a request to add this service to iGOT:
+        **Issue Identified:** Request to Add or Update Service/Cadre Details
+
+        **Summary of Request:**
+        You reported that the required service is currently unavailable. You would like to add the following:
+
         • **Service Name:** {{ ctx.collected.service_requested }}
         • **Cadre Controlling Authority:** {{ ctx.collected.service_cadre_authority }}
 
-        Shall I submit this request?
+        Please review the details above and confirm whether they are correct.
     quick_replies:
-      - { id: yes, label: "✅ Yes, submit" }
-      - { id: no,  label: "❌ No, cancel" }
+      - { id: confirm, label: "✅ Confirm" }
+      - { id: edit,    label: "✏️ Edit Details" }
+    disable_input: true
     on_reply:
-      yes: raise_service_ticket
-      no:  satisfied
+      confirm: raise_service_ticket
+      edit:    service_not_found_collect
 
   - id: raise_service_ticket
     type: transfer_llm
+    auto_raise: silent
     llm_context:
       include_messages: true
       include_collected: true
@@ -2119,6 +2138,7 @@ nodes:
   # ═══════════════════════════════════════════════════════════════════════════
   - id: transfer_to_llm
     type: transfer_llm
+    auto_raise: silent
     llm_context:
       include_messages: true
       include_collected: true

@@ -196,6 +196,7 @@ class ApiCallNode(NodeHandler):
                         node_id, integration_name, rendered["method"], rendered["url"],
                     )
                     return _record_error(state, cfg, "not_found")
+
                 except Exception as e:  # noqa: BLE001
                     log.error(
                         "[api_call] node=%s raised %s: %s  (integration=%s %s %s)",
@@ -383,9 +384,11 @@ def _state_ctx(state: ConversationState) -> dict[str, Any]:
         "language": state.language,
         # ticket_draft is populated by transfer_llm; exposed so _zoho_ticket.yaml
         # can use {{ ctx.ticket_draft.subject }} / {{ ctx.ticket_draft.description }}
-        "ticket_draft": state.ticket_draft.model_dump() if state.ticket_draft else {},
+        "ticket_draft": (
+            state.ticket_draft.model_dump() if hasattr(state.ticket_draft, "model_dump")
+            else state.ticket_draft
+        ) if state.ticket_draft else {},
     }
-
 
 def _render_request(
     request_cfg: dict[str, Any],

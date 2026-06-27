@@ -259,7 +259,7 @@ nodes:
     disable_input: true
     on_reply:
       agree:    satisfied
-      disagree: disagree_auto_ticket
+      disagree: disagree_step1_ticket
 
   - id: resolve_clap_reset_w2
     type: message
@@ -278,7 +278,7 @@ nodes:
     disable_input: true
     on_reply:
       agree:    satisfied
-      disagree: disagree_auto_ticket
+      disagree: disagree_step1_ticket
 
   - id: resolve_clap_reset_w3
     type: message
@@ -297,7 +297,7 @@ nodes:
     disable_input: true
     on_reply:
       agree:    satisfied
-      disagree: disagree_auto_ticket
+      disagree: disagree_step1_ticket
 
   - id: resolve_clap_reset_w4
     type: message
@@ -316,7 +316,7 @@ nodes:
     disable_input: true
     on_reply:
       agree:    satisfied
-      disagree: disagree_auto_ticket
+      disagree: disagree_step1_ticket
 
   - id: resolve_clap_reset_w5
     type: message
@@ -335,7 +335,7 @@ nodes:
     disable_input: true
     on_reply:
       agree:    satisfied
-      disagree: disagree_auto_ticket
+      disagree: disagree_step1_ticket
 
   - id: resolve_clap_reset_w6
     type: message
@@ -354,7 +354,7 @@ nodes:
     disable_input: true
     on_reply:
       agree:    satisfied
-      disagree: disagree_auto_ticket
+      disagree: disagree_step1_ticket
 
   - id: resolve_clap_reset_w7
     type: message
@@ -373,7 +373,7 @@ nodes:
     disable_input: true
     on_reply:
       agree:    satisfied
-      disagree: disagree_auto_ticket
+      disagree: disagree_step1_ticket
 
   - id: resolve_clap_reset_w8
     type: message
@@ -392,7 +392,7 @@ nodes:
     disable_input: true
     on_reply:
       agree:    satisfied
-      disagree: disagree_auto_ticket
+      disagree: disagree_step1_ticket
 
   - id: resolve_clap_reset_w9
     type: message
@@ -411,7 +411,7 @@ nodes:
     disable_input: true
     on_reply:
       agree:    satisfied
-      disagree: disagree_auto_ticket
+      disagree: disagree_step1_ticket
 
   - id: resolve_clap_reset_w10
     type: message
@@ -430,7 +430,7 @@ nodes:
     disable_input: true
     on_reply:
       agree:    satisfied
-      disagree: disagree_auto_ticket
+      disagree: disagree_step1_ticket
 
   - id: resolve_clap_reset_w11
     type: message
@@ -449,7 +449,7 @@ nodes:
     disable_input: true
     on_reply:
       agree:    satisfied
-      disagree: disagree_auto_ticket
+      disagree: disagree_step1_ticket
 
   - id: resolve_clap_reset_w12
     type: message
@@ -470,7 +470,7 @@ nodes:
     disable_input: true
     on_reply:
       agree:    satisfied
-      disagree: disagree_auto_ticket
+      disagree: disagree_step1_ticket
 
   # ===========================================================================
   # 3b. All 12 weeks ≥ 60 min — discrepancy detected → raise ticket
@@ -497,15 +497,56 @@ nodes:
         | {{ ctx.collected.w12_label }} | {{ ctx.collected.w12_mins | default(0) | round(1) }} min |
 
         Since your time spent meets the requirement across all tracked weeks, this appears to be a **discrepancy** that requires investigation by our technical team.
+    next: discrepancy_step1_ticket
 
-        I will raise a support ticket on your behalf.
-    next: discrepancy_auto_ticket
+  - id: discrepancy_step1_ticket
+    type: message
+    prompt:
+      text: |
+        **Issue Identified:** Weekly Clap Not Credited — Discrepancy Detected
+
+        **Summary of Request:**
+        You reported that your weekly activity data shows you met the 60-minute threshold across all tracked weeks, but the weekly clap was not credited. You would like us to investigate this technical discrepancy.
+        {% if ctx.collected.total_claps is not none %}
+        • **Current Weekly Clap Count:** {{ ctx.collected.total_claps }}
+        {% endif %}
+
+        Please review the details above and confirm whether they are correct.
+    quick_replies:
+      - { id: confirm, label: "✅ Confirm" }
+      - { id: cancel,  label: "❌ Cancel" }
+    disable_input: true
+    on_reply:
+      confirm: discrepancy_auto_ticket
+      cancel:  satisfied
+
+  - id: disagree_step1_ticket
+    type: message
+    prompt:
+      text: |
+        **Issue Identified:** Weekly Clap Reset — Disputed Activity Data
+
+        **Summary of Request:**
+        You reported that your recorded activity time does not match your actual time spent on the platform. You would like us to investigate this discrepancy.
+        {% if ctx.collected.total_claps is not none %}
+        • **Current Weekly Clap Count:** {{ ctx.collected.total_claps }}
+        {% endif %}
+
+        Please review the details above and confirm whether they are correct.
+    quick_replies:
+      - { id: confirm, label: "✅ Confirm" }
+      - { id: cancel,  label: "❌ Cancel" }
+    disable_input: true
+    on_reply:
+      confirm: disagree_auto_ticket
+      cancel:  satisfied
 
   # ===========================================================================
   # Ticket path — User disagrees with reset explanation (SOP 1.3.3)
   # ===========================================================================
   - id: disagree_auto_ticket
     type: transfer_llm
+    auto_raise: silent
     llm_context:
       include_messages:  true
       include_collected: true
@@ -527,6 +568,7 @@ nodes:
   # ===========================================================================
   - id: discrepancy_auto_ticket
     type: transfer_llm
+    auto_raise: silent
     llm_context:
       include_messages:  true
       include_collected: true

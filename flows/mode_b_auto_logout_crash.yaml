@@ -111,7 +111,29 @@ nodes:
     type: branch
     rules:
       - { if: "float(ctx.collected.android_version) < 8", then: android_unsupported_version }
-    default: android_raise_ticket
+    default: android_confirm_ticket
+
+  - id: android_confirm_ticket
+    type: message
+    prompt:
+      text: |
+        **Issue Identified:** Auto Logout / App Crash — Technical Issue
+
+        **Summary of Request:**
+        You reported that you are experiencing an auto logout or application crash issue on your Android device. You would like us to investigate this technical issue further.
+        
+        • **Device Name:** {{ ctx.collected.device_name }}
+        • **Device Model:** {{ ctx.collected.device_model }}
+        • **Android Version:** {{ ctx.collected.android_version }}
+
+        Please review the details above and confirm whether they are correct.
+    quick_replies:
+      - { id: confirm, label: "✅ Confirm" }
+      - { id: cancel,  label: "❌ Cancel" }
+    disable_input: true
+    on_reply:
+      confirm: android_raise_ticket
+      cancel:  satisfied
 
   - id: android_unsupported_version
     type: resolution
@@ -129,6 +151,7 @@ nodes:
 
   - id: android_raise_ticket
     type: transfer_llm
+    auto_raise: silent
     llm_context:
       include_messages:  true
       include_collected: true
@@ -170,7 +193,29 @@ nodes:
     type: branch
     rules:
       - { if: "float(ctx.collected.ios_version) < 15.6", then: ios_unsupported_version }
-    default: ios_raise_ticket
+    default: ios_confirm_ticket
+
+  - id: ios_confirm_ticket
+    type: message
+    prompt:
+      text: |
+        **Issue Identified:** Auto Logout / App Crash — Technical Issue
+
+        **Summary of Request:**
+        You reported that you are experiencing an auto logout or application crash issue on your iOS device. You would like us to investigate this technical issue further.
+        
+        • **Device Name:** {{ ctx.collected.device_name }}
+        • **Device Model:** {{ ctx.collected.device_model }}
+        • **iOS Version:** {{ ctx.collected.ios_version }}
+
+        Please review the details above and confirm whether they are correct.
+    quick_replies:
+      - { id: confirm, label: "✅ Confirm" }
+      - { id: cancel,  label: "❌ Cancel" }
+    disable_input: true
+    on_reply:
+      confirm: ios_raise_ticket
+      cancel:  satisfied
 
   - id: ios_unsupported_version
     type: resolution
@@ -188,6 +233,7 @@ nodes:
 
   - id: ios_raise_ticket
     type: transfer_llm
+    auto_raise: silent
     llm_context:
       include_messages:  true
       include_collected: true
