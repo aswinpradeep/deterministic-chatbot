@@ -853,14 +853,29 @@ nodes:
     type: message
     prompt:
       text: |
-        We will raise a support ticket for further investigation.
-    next: cap_auto_ticket
+        **Issue Identified:** CAP Technical Issue
+
+        **Summary of Request:**
+        You reported that a technical issue has occurred with your Comprehensive Assessment Program (CAP). You would like us to investigate this issue.
+        {% if ctx.collected.course_name %}
+        • **CAP:** {{ ctx.collected.course_name }}
+        {% endif %}
+
+        Please review the details above and confirm whether they are correct.
+    quick_replies:
+      - { id: confirm, label: "✅ Confirm" }
+      - { id: cancel,  label: "❌ Cancel" }
+    disable_input: true
+    on_reply:
+      confirm: cap_auto_ticket
+      cancel:  satisfied
 
   # ---------------------------------------------------------------------------
   # Ticket Raising
   # ---------------------------------------------------------------------------
   - id: cap_auto_ticket
     type: transfer_llm
+    auto_raise: silent
     llm_context:
       include_messages: true
       include_collected: true
@@ -1148,10 +1163,22 @@ nodes:
     type: message
     prompt:
       text: |
-        We will raise a support ticket for further investigation.
+        **Issue Identified:** CAP Assessment Attempt Limit Exceeded
 
-        The concerned team will check whether the assessment attempt limit has been exceeded and take the necessary action.
-    next: cap_auto_ticket
+        **Summary of Request:**
+        You reported that the assessment attempt limit has been exceeded for your Comprehensive Assessment Program. You would like the concerned team to verify and take the necessary action.
+        {% if ctx.collected.course_name %}
+        • **CAP:** {{ ctx.collected.course_name }}
+        {% endif %}
+
+        Please review the details above and confirm whether they are correct.
+    quick_replies:
+      - { id: confirm, label: "✅ Confirm" }
+      - { id: cancel,  label: "❌ Cancel" }
+    disable_input: true
+    on_reply:
+      confirm: cap_auto_ticket
+      cancel:  satisfied
 
   # ===========================================================================
   # Child Course Technical Issue & Engineering Excel
@@ -1160,10 +1187,22 @@ nodes:
     type: message
     prompt:
       text: |
-        Upon checking, we found a technical issue affecting one or more child courses under your Comprehensive Assessment Program (CAP). 
+        **Issue Identified:** CAP Child Course Technical Issue
 
-        We will raise a support ticket for further investigation. The technical team will review this and update the Engineering Excel in the backend accordingly.
-    next: cap_child_course_technical_ticket
+        **Summary of Request:**
+        You reported that a technical issue is affecting one or more child courses under your Comprehensive Assessment Program (CAP). You would like the technical team to review this and update the backend accordingly.
+        {% if ctx.collected.course_name %}
+        • **CAP:** {{ ctx.collected.course_name }}
+        {% endif %}
+
+        Please review the details above and confirm whether they are correct.
+    quick_replies:
+      - { id: confirm, label: "✅ Confirm" }
+      - { id: cancel,  label: "❌ Cancel" }
+    disable_input: true
+    on_reply:
+      confirm: cap_child_course_technical_ticket
+      cancel:  satisfied
 
   - id: cap_child_course_technical_ticket
     type: engineering_ticket
@@ -1186,13 +1225,13 @@ nodes:
     type: message
     prompt:
       text: |
-        {% if ctx.collected.cap_issue_type == 'cap_assessment_limit' or ctx.collected.assessment_pending_issue == 'limit' %}
-        We have verified that the assessment attempt limit has been exceeded. A support ticket (Ticket ID: #{{ ctx.collected.ticket_id }}) has been raised and shared with the concerned team for further investigation.
-        {% elif ctx.collected._last_choice_id == 'other' %}
-        We have captured the reported error and raised a support ticket (Ticket ID: {{ ctx.collected.ticket_id }}) for further investigation.
-        {% else %}
-        ✅ Ticket **#{{ ctx.collected.ticket_id }}** raised. L2 team will reach you within **2 business days**. 📧
-        {% endif %}
+        Your request has been successfully submitted.
+
+        **Ticket ID: #{{ ctx.collected.ticket_id }}**
+
+        Our support team will review your request and reach out to you with further updates.
+
+        Thank you for your patience.
     next: ticket_raised_end
 
   # ===========================================================================

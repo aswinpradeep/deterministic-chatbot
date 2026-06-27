@@ -203,19 +203,25 @@ nodes:
     type: message
     prompt:
       text: |
-        We found that the selected event does not contain a valid video. This appears to be a content configuration issue.
+        **Issue Identified:** Event Video Missing — Content Configuration Issue
 
-        Would you like us to raise a support ticket for further investigation by our technical team?
+        **Summary of Request:**
+        You reported that the video for the event is missing. You would like us to investigate this content configuration issue.
+        
+        • **Event:** {{ ctx.collected.event_name or 'Selected event' }}
+
+        Please review the details above and confirm whether they are correct.
     quick_replies:
-      - { id: yes, label: "✅ Yes, raise ticket" }
-      - { id: no,  label: "❌ No" }
+      - { id: confirm, label: "✅ Confirm" }
+      - { id: cancel,  label: "❌ Cancel" }
     disable_input: true
     on_reply:
-      yes: auto_ticket_uc1
-      no:  satisfied
+      confirm: auto_ticket_uc1
+      cancel:  satisfied
 
   - id: auto_ticket_uc1
     type: transfer_llm
+    auto_raise: silent
     llm_context:
       include_messages:  true
       include_collected: true
@@ -266,17 +272,38 @@ nodes:
     prompt:
       text: |
         We found an issue with the event video configuration. A support ticket needs to be raised for further investigation.
-    next: auto_ticket_uc2
+    next: step1_ticket_uc2
 
   - id: resolution_uc2_case_b
     type: message
     prompt:
       text: |
         We found an issue with the configured video URL. A support ticket needs to be raised for further investigation.
-    next: auto_ticket_uc2
+    next: step1_ticket_uc2
+
+  - id: step1_ticket_uc2
+    type: message
+    prompt:
+      text: |
+        **Issue Identified:** Event Video Not Playing — Configuration Issue
+
+        **Summary of Request:**
+        You reported that the video for the event is not playing due to an invalid configuration. You would like us to investigate this technical issue.
+        
+        • **Event:** {{ ctx.collected.event_name or 'Selected event' }}
+
+        Please review the details above and confirm whether they are correct.
+    quick_replies:
+      - { id: confirm, label: "✅ Confirm" }
+      - { id: cancel,  label: "❌ Cancel" }
+    disable_input: true
+    on_reply:
+      confirm: auto_ticket_uc2
+      cancel:  satisfied
 
   - id: auto_ticket_uc2
     type: transfer_llm
+    auto_raise: silent
     llm_context:
       include_messages:  true
       include_collected: true
@@ -317,11 +344,32 @@ nodes:
         - { id: yes, label: "✅ Yes, issue persists" }
         - { id: no,  label: "❌ No, it's resolved" }
     on_reply:
-      yes: auto_ticket_uc2_persists
+      yes: step1_ticket_uc2_persists
       no:  satisfied
+
+  - id: step1_ticket_uc2_persists
+    type: message
+    prompt:
+      text: |
+        **Issue Identified:** Event Video Not Playing — Troubleshooting Failed
+
+        **Summary of Request:**
+        You reported that the video for the event is still not playing despite following the standard troubleshooting steps. You would like us to investigate this technical issue.
+        
+        • **Event:** {{ ctx.collected.event_name or 'Selected event' }}
+
+        Please review the details above and confirm whether they are correct.
+    quick_replies:
+      - { id: confirm, label: "✅ Confirm" }
+      - { id: cancel,  label: "❌ Cancel" }
+    disable_input: true
+    on_reply:
+      confirm: auto_ticket_uc2_persists
+      cancel:  satisfied
 
   - id: auto_ticket_uc2_persists
     type: transfer_llm
+    auto_raise: silent
     llm_context:
       include_messages:  true
       include_collected: true
@@ -356,19 +404,25 @@ nodes:
     type: message
     prompt:
       text: |
-        We found that the event completion criteria have been met; however, the progress has not been updated. This appears to be a technical issue.
+        **Issue Identified:** Event Progress Not Updating — Technical Issue
 
-        Would you like us to raise a support ticket for further investigation?
+        **Summary of Request:**
+        You reported that your progress for the event is not updating, even though you have met the completion criteria. You would like us to investigate this technical issue.
+        
+        • **Event:** {{ ctx.collected.event_name or 'Selected event' }}
+
+        Please review the details above and confirm whether they are correct.
     quick_replies:
-      - { id: yes, label: "✅ Yes, please raise a ticket" }
-      - { id: no,  label: "❌ No, thank you" }
+      - { id: confirm, label: "✅ Confirm" }
+      - { id: cancel,  label: "❌ Cancel" }
     disable_input: true
     on_reply:
-      yes: auto_ticket_uc3
-      no:  satisfied
+      confirm: auto_ticket_uc3
+      cancel:  satisfied
 
   - id: auto_ticket_uc3
     type: transfer_llm
+    auto_raise: silent
     llm_context:
       include_messages:  true
       include_collected: true
@@ -420,19 +474,25 @@ nodes:
     type: message
     prompt:
       text: |
-        We found that the event completion criteria have been met; however, the certificate is currently unavailable. This appears to be a technical issue.
+        **Issue Identified:** Event Certificate Not Generated — Technical Issue
 
-        Would you like us to raise a support ticket for further investigation?
+        **Summary of Request:**
+        You reported that your certificate for the event has not been generated, even though you have met the completion criteria. You would like us to investigate this technical issue.
+        
+        • **Event:** {{ ctx.collected.event_name or 'Selected event' }}
+
+        Please review the details above and confirm whether they are correct.
     quick_replies:
-      - { id: yes, label: "✅ Yes, please raise a ticket" }
-      - { id: no,  label: "❌ No, thank you" }
+      - { id: confirm, label: "✅ Confirm" }
+      - { id: cancel,  label: "❌ Cancel" }
     disable_input: true
     on_reply:
-      yes: auto_ticket_uc4
-      no:  satisfied
+      confirm: auto_ticket_uc4
+      cancel:  satisfied
 
   - id: auto_ticket_uc4
     type: transfer_llm
+    auto_raise: silent
     llm_context:
       include_messages:  true
       include_collected: true

@@ -49,6 +49,11 @@ entry_node: fetch_transfer_status
 
 imports:
   - _terminal
+  - fragment: _zoho_ticket
+    with:
+      cf_category:     profile
+      cf_sub_category: access_revoked
+      cf_flow_id:      ACCESS_REVOKED
   - fragment: _yp_lookup
 
 nodes:
@@ -676,6 +681,32 @@ nodes:
       text: |
         ⚠️ **YP / SPOC Details Not Found**
 
+        We could not locate a YP or SPOC for your organization. A support ticket will be raised for further investigation — our team will reach out to assist you.
+    next: access_revoked_step1_ticket
+
+  - id: access_revoked_step1_ticket
+    type: message
+    prompt:
+      text: |
+        **Issue Identified:** Access Revoked — Support Request
+
+        **Summary of Request:**
+        You reported that you could not locate a YP or SPOC for your organization. You would like us to investigate and assist you with this access issue.
+        {% if ctx.collected.user_channel %}
+        • **Your Organisation:** {{ ctx.collected.user_channel }}
+        {% endif %}
+        {% if ctx.collected.transfer_dept_name %}
+        • **Target Organisation:** {{ ctx.collected.transfer_dept_name }}
+        {% endif %}
+
+        Please review the details above and confirm whether they are correct.
+    quick_replies:
+      - { id: confirm, label: "✅ Confirm" }
+      - { id: cancel,  label: "❌ Cancel" }
+    disable_input: true
+    on_reply:
+      confirm: access_revoked_auto_ticket
+      cancel:  satisfied
     next: satisfied
 
   # ===========================================================================
@@ -687,6 +718,29 @@ nodes:
       text: |
         I'm sorry, I encountered a technical issue while checking your profile and can't proceed with the automated steps right now.
 
+        This might be a temporary problem. If it continues, please email our support team directly at **support@igotkarmayogi.gov.in** for assistance.
+    next: satisfied
+
+  - id: access_revoked_auto_ticket
+    type: transfer_llm
+    auto_raise: silent
+    llm_context:
+      include_messages:  true
+      include_collected: true
+      include_flow_meta: true
+    llm_directives:
+      objective: |
+        The user's access has been revoked. 
+        Generate a support ticket.
+        Subject: "Access Revoked / Transfer Request Support"
+        Description: Include whether a transfer request was already pending (wf_transfer_id: {{ ctx.collected.wf_transfer_id }}), the target organization ({{ ctx.collected.transfer_dept_name }}), which path the user followed (e.g., pending request, no request, button disabled, org not found), and the user's current organization/channel ({{ ctx.collected.user_channel }}).
+      priority_override: P2
+    on_complete: confirm_ticket
+    on_restart: fetch_transfer_status
+
+  # Note: confirm_ticket (API call to Zoho) and ticket_confirmation are provided
+  # by the imported _zoho_ticket fragment. The local override has been removed
+  # so that tickets are actually created via the Zoho Desk API.
     next: satisfied
 
   - id: satisfied
