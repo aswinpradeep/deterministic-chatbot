@@ -236,6 +236,8 @@ nodes:
         {%- if courses %}
         **Plan {{ loop.index }}** — Last Date: {{ (plan_end | date('%d/%m/%Y')) if plan_end else '—' }}
 
+        | No. | Course Name | Status |
+        |---|---|---|
         {%- set ns = namespace(count=0) %}
         {% for item in courses %}
         {% set ns.count = ns.count + 1 %}
@@ -255,8 +257,7 @@ nodes:
             {%- set course_status.text = 'Incomplete (' ~ percentage ~ '%)' -%}
           {%- endif -%}
         {%- endif %}
-        {{ ns.count }}. [{{ item.name }}](https://portal.uat.karmayogibharat.net/app/toc/{{ item.get('identifier') }}/overview)
-           **Status:** {{ course_status.text }}
+        | {{ ns.count }} | [{{ item.name }}](https://portal.uat.karmayogibharat.net/app/toc/{{ item.get('identifier') }}/overview) | {{ course_status.text }} |
         {% endfor %}
 
         {% endif %}
@@ -283,6 +284,8 @@ nodes:
         {%- if courses %}
         **Plan {{ loop.index }}** — Last Date: {{ (plan_end | date('%d/%m/%Y')) if plan_end else '—' }}
 
+        | No. | Course Name | Status |
+        |---|---|---|
         {%- set ns = namespace(count=0) %}
         {% for item in courses %}
         {% set ns.count = ns.count + 1 %}
@@ -302,8 +305,7 @@ nodes:
             {%- set course_status.text = 'Incomplete (' ~ percentage ~ '%)' -%}
           {%- endif -%}
         {%- endif %}
-        {{ ns.count }}. [{{ item.name }}](https://portal.uat.karmayogibharat.net/app/toc/{{ item.get('identifier') }}/overview)
-           **Status:** {{ course_status.text }}
+        | {{ ns.count }} | [{{ item.name }}](https://portal.uat.karmayogibharat.net/app/toc/{{ item.get('identifier') }}/overview) | {{ course_status.text }} |
         {% endfor %}
 
         {% endif %}
