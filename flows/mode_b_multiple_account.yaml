@@ -160,7 +160,7 @@ nodes:
           if: "not ctx.collected.new_identifier.isdigit()",
           then: reject_invalid_mobile,
         }
-    default: check_registration
+    default: fetch_current_profile
 
   - id: reject_invalid_mobile
     type: message
@@ -190,7 +190,7 @@ nodes:
     on_success: branch_domain_check
     on_error:
       # Cannot verify domain — treat as valid and continue
-      any: check_registration
+      any: fetch_current_profile
     timeout_ms: 5000
 
   - id: branch_domain_check
@@ -207,7 +207,7 @@ nodes:
           if: "email_domain_valid(ctx.collected.new_identifier, ctx.collected.approved_domains) == False",
           then: domain_invalid_fetch_user_profile,
         }
-    default: check_registration
+    default: fetch_current_profile
 
   # ---------------------------------------------------------------------------
   # Domain NOT valid — fetch user profile to get rootOrgId → MDO lookup
@@ -368,14 +368,69 @@ nodes:
     on_reply:
       retry: check_registration
 
+  # ===========================================================================
+  # STEP 3 — Fetch current user's profile to compare identifier
+  # ===========================================================================
+  - id: fetch_current_profile
+    type: api_call
+    integration: karmayogi
+    request:
+      method: GET
+      url: "/api/user/private/v1/read/{{ ctx.user_id_hash }}"
+    response_mapping:
+      - { from: "$.response.profileDetails.personalDetails.primaryEmail", to: collected.current_email }
+      - { from: "$.response.profileDetails.personalDetails.mobile", to: collected.current_phone }
+    on_success: check_same_identifier
+    on_error:
+      any: check_registration
+    timeout_ms: 5000
+
+  - id: check_same_identifier
+    type: branch
+    rules:
+      - {
+          if: "ctx.collected.update_type == 'EMAIL' and ctx.collected.new_identifier == ctx.collected.current_email",
+          then: same_identifier_message,
+        }
+      - {
+          if: "ctx.collected.update_type == 'MOBILE' and ctx.collected.new_identifier == ctx.collected.current_phone",
+          then: same_identifier_message,
+        }
+    default: check_registration
+
+  # ===========================================================================
+  # STEP 4 — Branch based on registration check
+  # ===========================================================================
   - id: branch_registration
     type: branch
     rules:
+      - {
+          if: "ctx.collected.conflict_count != None and ctx.collected.conflict_count > 0 and ctx.collected.conflict_user_id == ctx.user_id_hash",
+          then: same_identifier_message,
+        }
       - {
           if: "ctx.collected.conflict_count != None and ctx.collected.conflict_count > 0",
           then: fetch_conflict_enrollments,
         }
     default: guide_self_service_update
+
+  # ===========================================================================
+  # 3.0 — Identifier belongs to the CURRENT user
+  # ===========================================================================
+  - id: same_identifier_message
+    type: message
+    prompt:
+      text: |
+        The **{{ ctx.collected.new_identifier }}** you provided is already the active {{ 'Email ID' if ctx.collected.update_type == 'EMAIL' else 'Mobile Number' }} on your current account!
+
+        Would you like to try entering a different {{ 'Email ID' if ctx.collected.update_type == 'EMAIL' else 'Mobile Number' }}, or are you all set?
+    quick_replies:
+      - { id: new, label: "🔄 Try another identifier" }
+      - { id: resolved, label: "✅ All good, I'm done" }
+    disable_input: true
+    on_reply:
+      new: ask_identifier_type
+      resolved: satisfied
 
   # ===========================================================================
   # 3.1 — Identifier NOT registered → guide self-service update
@@ -538,131 +593,30 @@ nodes:
           from: "$.userCourseEnrolmentInfo.certificatesIssued",
           to: collected.conflict_completed,
         }
-    on_success: show_conflict_details
+    on_success: show_impact_and_confirm
     on_error:
       # If enrollment fetch fails (e.g. cross-user permission), show what we know
-      any: show_conflict_details
+      any: show_impact_and_confirm
     timeout_ms: 8000
 
   # ---------------------------------------------------------------------------
-  # Step 4.2 — Inform user about the conflict account details
+  # Step 4.3 — Inform user about impact and obtain final confirmation
   # ---------------------------------------------------------------------------
-  - id: show_conflict_details
-    type: message
+  - id: show_impact_and_confirm
+    type: ticket_confirm
     prompt:
       text: |
         **Identifier Already Registered**
 
-        The {{ 'Email ID' if ctx.collected.update_type == 'EMAIL' else 'Mobile Number' }} **{{ ctx.collected.new_identifier }}** is already registered with another account.
+        The {{ 'Email ID' if ctx.collected.update_type == 'EMAIL' else 'Mobile Number' }} you have provided is already associated with another account.
 
-        **Details of the registered account:**
-        🏢 **Organisation:** {{ ctx.collected.conflict_org_name or "Unknown" }}
-        📚 **Total Enrollments:** {{ (ctx.collected.conflict_inprogress or 0) + (ctx.collected.conflict_completed or 0) }}
-        🔄 **In Progress:** {{ ctx.collected.conflict_inprogress or "—" }}
-        ✅ **Completed:** {{ ctx.collected.conflict_completed or "—" }}
-
-        Would you like to proceed?
-    quick_replies:
-      - { id: no, label: "❌ No, don't proceed" }
-      - { id: merge, label: "🔗 Can we merge both accounts?" }
-      - { id: proceed, label: "➡️ Yes, I want to proceed" }
-    disable_input: true
-    on_reply:
-      save_to: collected.conflict_decision
-      no: case_a_no_proceed
-      merge: case_b_merge_not_possible
-      proceed: case_c_fetch_profile
-
-  # ---------------------------------------------------------------------------
-  # Case A — User says NO
-  # ---------------------------------------------------------------------------
-  - id: case_a_no_proceed
-    type: end
-    outcome: self_served
-    prompt:
-      text: |
-        Understood. No changes have been made to your account.
-
-        Please feel free to reach out if you require any further assistance.
-
-  # ---------------------------------------------------------------------------
-  # Case B — User requests account merge (not supported)
-  # ---------------------------------------------------------------------------
-  - id: case_b_merge_not_possible
-    type: end
-    outcome: self_served
-    prompt:
-      text: |
-        Unfortunately, **account merging is currently not supported** on the iGOT Karmayogi platform.
-
-        Please feel free to reach out if you require any further assistance.
-
-  # ---------------------------------------------------------------------------
-  # Case C — User confirms they want to proceed
-  # Step 4.3a — Fetch current user's profile to get their current email / phone
-  # ---------------------------------------------------------------------------
-  - id: case_c_fetch_profile
-    type: api_call
-    integration: karmayogi
-    request:
-      method: GET
-      url: "/api/user/private/v1/read/{{ ctx.user_id_hash }}"
-    response_mapping:
-      - {
-          from: "$.response.profileDetails.personalDetails.primaryEmail",
-          to: collected.current_email,
-        }
-      - {
-          from: "$.response.profileDetails.personalDetails.mobile",
-          to: collected.current_phone,
-        }
-    on_success: case_c_fetch_current_enrollments
-    on_error:
-      any: case_c_fetch_current_enrollments
-    timeout_ms: 5000
-
-  # Step 4.3b — Fetch current account enrollments to show impact
-  - id: case_c_fetch_current_enrollments
-    type: api_call
-    integration: karmayogi
-    request:
-      method: POST
-      url: "/api/course/private/v4/user/enrollment/list/{{ ctx.user_id_hash }}"
-      body:
-        request:
-          retiredCoursesEnabled: true
-    response_mapping:
-      - {
-          from: "$.userCourseEnrolmentInfo.coursesInProgress",
-          to: collected.current_inprogress,
-        }
-      - {
-          from: "$.userCourseEnrolmentInfo.certificatesIssued",
-          to: collected.current_completed,
-        }
-    on_success: case_c_show_impact
-    on_error:
-      any: case_c_show_impact
-    timeout_ms: 8000
-
-  # Step 4.3 — Inform user about impact of proceeding
-  - id: case_c_show_impact
-    type: ticket_confirm
-    prompt:
-      text: |
-        **Please review the following before confirming:**
-
-        **Your current account enrollments:**
-        📚 **Total Enrollments:** {{ (ctx.collected.current_inprogress or 0) + (ctx.collected.current_completed or 0) }}
-        🔄 **In Progress:** {{ ctx.collected.current_inprogress or "—" }}
-        ✅ **Completed:** {{ ctx.collected.current_completed or "—" }}
-
-        **Impact if you proceed:**
-        - The account currently associated with **{{ ctx.collected.new_identifier }}** will be **deactivated**.
+        **If we proceed with this update:**
+        - The account currently associated with this {{ 'Email ID' if ctx.collected.update_type == 'EMAIL' else 'Mobile Number' }} will be **deactivated**.
         - Access to that account will **no longer be available**.
+        - All existing learning records will remain associated with your current account after the update.
 
         **Summary of Request:**
-        You reported that you would like to update your {{ 'Email ID' if ctx.collected.update_type == 'EMAIL' else 'Mobile Number' }}. You would like us to proceed with this change and deactivate the conflicting account.
+        You reported that you would like to update your {{ 'Email ID' if ctx.collected.update_type == 'EMAIL' else 'Mobile Number' }}. You would like us to raise a support request for this change.
 
         • **Current {{ 'Email ID' if ctx.collected.update_type == 'EMAIL' else 'Mobile Number' }}:** {{ (ctx.collected.current_email or "(your registered identifier)") if ctx.collected.update_type == 'EMAIL' else (ctx.collected.current_phone or "(your registered identifier)") }}
         • **{{ 'Email ID' if ctx.collected.update_type == 'EMAIL' else 'Mobile Number' }} to be Updated:** {{ ctx.collected.new_identifier }}
@@ -688,25 +642,28 @@ nodes:
     type: transfer_llm
     auto_raise: silent
     llm_context:
-      include_messages: true
-      include_collected: true
-      include_flow_meta: true
+      skip_llm: true
+      include_messages: false
+      include_collected: false
+      include_flow_meta: false
     llm_directives:
-      objective: |
-        The user has confirmed they want to update their {{ ctx.collected.update_type or 'Email/Mobile' }} to an identifier already registered to another account.
-        Generate a Zoho support ticket for L2 manual processing.
+      subject_hint: "Multiple Account Conflict — {{ ctx.collected.update_type }} Update Request"
+      static_description: |
+        User ID: {{ ctx.user_id_hash }}
+        Current Email ID: {{ ctx.collected.current_email or 'N/A' }}
+        New Email ID / Mobile Number: {{ ctx.collected.new_identifier }}
+        User Confirmation: YES
+        Validation Details: Identifier verified as already registered via /api/private/user/v1/search
+        Organization Details: {{ ctx.collected.conflict_org_name or 'Unknown' }}
+        Enrollment Details:
+        Number of Enrolled Courses: {{ (ctx.collected.conflict_inprogress or 0) + (ctx.collected.conflict_completed or 0) }}
+        Number of In-Progress Courses: {{ ctx.collected.conflict_inprogress or 0 }}
+        Number of Completed Courses: {{ ctx.collected.conflict_completed or 0 }}
 
-        Subject: "Multiple Account Conflict — {{ ctx.collected.update_type }} Update Request"
-        Description: Include:
-          - User ID (ctx.user_id_hash)
-          - Current identifier: {{ ctx.collected.current_email if ctx.collected.update_type == 'EMAIL' else ctx.collected.current_phone }}
-          - New identifier to be updated (ctx.collected.new_identifier)
-          - Conflict account organisation (ctx.collected.conflict_org_name)
-          - Conflict account enrollment stats: in_progress={{ ctx.collected.conflict_inprogress }}, completed={{ ctx.collected.conflict_completed }}, total={{ (ctx.collected.conflict_inprogress or 0) + (ctx.collected.conflict_completed or 0) }}
-          - Current account enrollment stats: in_progress={{ ctx.collected.current_inprogress }}, completed={{ ctx.collected.current_completed }}, total={{ (ctx.collected.current_inprogress or 0) + (ctx.collected.current_completed or 0) }}
-          - User confirmation: YES (user explicitly confirmed proceeding with deactivation)
-          - Validation status: identifier verified as already registered via /api/private/user/v1/search
-          - Action required: Deactivate the conflicting account and update the user's identifier.
+        Confirmation that the user understands the existing account associated with the Email ID / Mobile Number will be deactivated after the update: YES
+
+        Action required: Deactivate the conflicting account and update the user's identifier.
+
         This is a P3 ticket requiring manual L2 account deactivation. Do NOT auto-apply any changes.
       priority_override: P3
     on_complete: confirm_ticket

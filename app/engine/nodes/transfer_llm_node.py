@@ -48,6 +48,7 @@ from typing import Any, Callable
 from app.engine.activity import Activity
 from app.engine.nodes.base import NodeHandler
 from app.engine.state import ConversationState, FlowStatus, TicketDraft
+from app.engine.template import render
 
 
 class TransferLLMNode(NodeHandler):
@@ -83,7 +84,8 @@ class TransferLLMNode(NodeHandler):
 
             # Try LLM to enhance the draft (only if not already capped / kill-switched)
             if (
-                state.llm_calls_this_session < 1
+                not llm_context_cfg.get("skip_llm", False)
+                and state.llm_calls_this_session < 1
                 and not settings.llm_kill_switch
                 and llm_adapter is not None
             ):
@@ -310,8 +312,19 @@ def _build_template_draft(
     flow_label = (state.flow_id or "").replace("_", " ").title()
     subject = directives.get("subject_hint") or _derive_subject(flow_label, collected)
 
+    ctx = {
+        "collected": state.collected,
+        "counters": state.counters,
+        "user_id_hash": state.user_id_hash,
+        "channel": state.channel,
+    }
+    if "{{" in subject or "{%" in subject:
+        subject = render(subject, ctx)
+
     # Plain text — no markdown symbols. Renders in chat and embeds cleanly in Zoho HTML.
-    if field_items:
+    if "static_description" in directives:
+        description = render(directives["static_description"], ctx)
+    elif field_items:
         description = "Details collected:\n\n" + "\n".join(
             f"{label}: {v}" for label, v in field_items
         )
