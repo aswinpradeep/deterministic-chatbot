@@ -610,16 +610,13 @@ nodes:
     type: transfer_llm
     auto_raise: silent
     llm_context:
+      skip_llm: true
       include_messages: false
       include_collected: false
       include_flow_meta: false
     llm_directives:
-      objective: |
-        Generate a JSON ticket summary for L2 manual processing.
-        
-        IMPORTANT: Set the JSON "subject" exactly to: "Multiple Account Conflict — {{ ctx.collected.update_type }} Update Request"
-        
-        IMPORTANT: Set the JSON "description" exactly to the following text (preserve newlines):
+      subject_hint: "Multiple Account Conflict — {{ ctx.collected.update_type }} Update Request"
+      static_description: |
         User ID: {{ ctx.user_id_hash }}
         Current Email ID: {{ ctx.collected.current_email or 'N/A' }}
         New Email ID / Mobile Number: {{ ctx.collected.new_identifier }}
