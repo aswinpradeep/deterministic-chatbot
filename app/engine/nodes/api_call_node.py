@@ -656,6 +656,165 @@ _ENROLLMENT_STATUS_MAP: dict[str, int] = {
 }
 
 
+def _parse_int_safe(val: Any) -> int:
+    try:
+        return int(val)
+    except (ValueError, TypeError):
+        return 0
+
+
+def _flatten_cbp_courses(enrollments: Any, all_courses: Any, is_apar: bool) -> list[dict]:
+    """Flatten CBP courses and merge with enrollments to calculate status.
+    
+    Returns a list of dicts suitable for a frontend picker.
+    """
+    if not isinstance(all_courses, list):
+        return []
+        
+    enrollment_map = {}
+    if isinstance(enrollments, list):
+        for e in enrollments:
+            if isinstance(e, dict) and "courseId" in e:
+                enrollment_map[str(e["courseId"])] = e
+
+    result = []
+    plan_index = 0
+    
+    for plan in all_courses:
+        if not isinstance(plan, dict):
+            continue
+            
+        plan_is_apar = bool(plan.get("isApar"))
+        if plan_is_apar != is_apar:
+            continue
+            
+        plan_index += 1
+        plan_name = f"Plan {plan_index}"
+        plan_end_raw = plan.get("endDate")
+        
+        plan_end = "—"
+        if plan_end_raw:
+            try:
+                # Usually timestamps (ms) or ISO strings
+                import datetime
+                if isinstance(plan_end_raw, (int, float)):
+                    dt = datetime.datetime.fromtimestamp(int(plan_end_raw) / 1000.0, tz=datetime.timezone.utc)
+                else:
+                    raw_str = str(plan_end_raw).replace("Z", "+00:00")
+                    dt = datetime.datetime.fromisoformat(raw_str)
+                plan_end = dt.strftime("%d/%m/%Y")
+            except Exception:
+                plan_end = str(plan_end_raw)
+                
+        content_list = plan.get("contentList")
+        if not isinstance(content_list, list):
+            continue
+            
+        # Extract courses and sort them by name (as done in the original Jinja template)
+        courses = [c for c in content_list if isinstance(c, dict) and c.get("contentType") == "Course"]
+        courses.sort(key=lambda x: str(x.get("name", "")))
+            
+        for item in courses:
+            course_id = str(item.get("identifier"))
+            course_name = str(item.get("name", ""))
+            status_text = "Not Started"
+            
+            e = enrollment_map.get(course_id)
+            if e:
+                status_raw = e.get("status")
+                if status_raw == 2 or str(status_raw).lower() == "completed":
+                    status_text = "Completed"
+                elif status_raw == 1 or str(status_raw).lower() == "in-progress":
+                    progress = _parse_int_safe(e.get("progress", 0))
+                    leaf_nodes = _parse_int_safe(e.get("leafNodesCount", 1))
+                    if leaf_nodes == 0:
+                        leaf_nodes = 1
+                    try:
+                        percentage = int(round((progress / leaf_nodes) * 100))
+                    except Exception:
+                        percentage = 0
+                    if percentage > 100:
+                        percentage = 100
+                    status_text = f"Incomplete ({percentage}%)"
+                    
+            result.append({
+                "courseId": course_id,
+                "courseName": course_name,
+                "statusText": status_text,
+                "planName": plan_name,
+                "endDate": plan_end,
+                "combinedMeta": f"{status_text} • Ends: {plan_end}" if plan_end != "—" else status_text
+            })
+            
+    return result
+
+
+def _flatten_apar_courses(enrollments: Any, all_courses: Any) -> list[dict]:
+    return _flatten_cbp_courses(enrollments, all_courses, is_apar=True)
+
+
+def _flatten_non_apar_courses(enrollments: Any, all_courses: Any) -> list[dict]:
+    return _flatten_cbp_courses(enrollments, all_courses, is_apar=False)
+
+
+def _extract_cbp_plans(all_courses: Any, is_apar: bool) -> list[dict]:
+    """Extract just the unique plans for a picker."""
+    if not isinstance(all_courses, list):
+        return []
+        
+    result = []
+    plan_index = 0
+    
+    for plan in all_courses:
+        if not isinstance(plan, dict):
+            continue
+            
+        plan_is_apar = bool(plan.get("isApar"))
+        if plan_is_apar != is_apar:
+            continue
+            
+        plan_index += 1
+        plan_name = f"Plan {plan_index}"
+        plan_end_raw = plan.get("endDate")
+        
+        plan_end = "—"
+        if plan_end_raw:
+            try:
+                import datetime
+                if isinstance(plan_end_raw, (int, float)):
+                    dt = datetime.datetime.fromtimestamp(int(plan_end_raw) / 1000.0, tz=datetime.timezone.utc)
+                else:
+                    raw_str = str(plan_end_raw).replace("Z", "+00:00")
+                    dt = datetime.datetime.fromisoformat(raw_str)
+                plan_end = dt.strftime("%d/%m/%Y")
+            except Exception:
+                plan_end = str(plan_end_raw)
+                
+        content_list = plan.get("contentList")
+        if not isinstance(content_list, list):
+            continue
+            
+        courses = [c for c in content_list if isinstance(c, dict) and c.get("contentType") == "Course"]
+        if not courses:
+            continue
+            
+        result.append({
+            "planId": plan_name,
+            "planLabel": plan_name,
+            "planMeta": f"Ends: {plan_end}" if plan_end != "—" else ""
+        })
+        
+    return result
+
+
+def _extract_apar_plans(enrollments: Any, all_courses: Any) -> list[dict]:
+    return _extract_cbp_plans(all_courses, is_apar=True)
+
+
+def _extract_non_apar_plans(enrollments: Any, all_courses: Any) -> list[dict]:
+    return _extract_cbp_plans(all_courses, is_apar=False)
+
+
 # ---------------------------------------------------------------------------
 # Enrollment count transforms — used by multiple_account flow to summarise
 # the courses list into simple integer counts for display.
@@ -1632,6 +1791,11 @@ _TRANSFORMS: dict[str, Any] = {
     "append_others_org":             _append_others_org,
     "append_others_language":        _append_others_language,
     "merge_lists":                   _merge_lists,
+    "parse_int":                _parse_int_safe,
+    "flatten_apar_courses":     _flatten_apar_courses,
+    "flatten_non_apar_courses": _flatten_non_apar_courses,
+    "extract_apar_plans":       _extract_apar_plans,
+    "extract_non_apar_plans":   _extract_non_apar_plans,
 }
 
 
