@@ -211,7 +211,7 @@ nodes:
         5. Open the course details page.
         6. Navigate to the **About** section.
         7. Click on **Download Certificate**.
-    next: c1_resolution_check
+    next: satisfied
 
   - id: c1_certificate_available_program
     type: message
@@ -228,7 +228,7 @@ nodes:
         5. Open the program details page.
         6. Navigate to the **About** section.
         7. Click on **Download Certificate**.
-    next: c1_resolution_check
+    next: satisfied
 
   - id: c1_wait_24h
     type: message
@@ -406,55 +406,6 @@ nodes:
 
         Please complete all pending resources and recheck certificate availability after successful program completion.
     next: satisfied
-
-  # --------------------------------------------------------------------------
-  # Satisfaction check — if unresolved, auto-raise ticket
-  # --------------------------------------------------------------------------
-  - id: c1_resolution_check
-    type: message
-    prompt:
-      text: "Did the above steps help resolve your certificate issue?"
-    quick_replies:
-      - { id: yes, label: "✅ Yes, resolved" }
-      - { id: no,  label: "❌ No, still facing issue" }
-    disable_input: true
-    on_reply:
-      yes: satisfied
-      no:  c1_step1_ticket
-
-  - id: c1_step1_ticket
-    type: ticket_confirm
-    prompt:
-      text: |
-        **Issue Identified:** Certificate Not Generated
-
-        **Summary of Request:**
-        You reported that your certificate has not been generated despite following the self-service steps. You would like us to investigate this issue.
-        
-        • **Course:** {{ ctx.collected.c1_course_name or 'Selected course' }}
-
-        Please review the details above and confirm whether they are correct.
-    on_confirm: c1_auto_ticket
-    on_cancel: satisfied
-
-  - id: c1_auto_ticket
-    type: transfer_llm
-    auto_raise: silent
-    llm_context:
-      include_messages:  true
-      include_collected: true
-      include_flow_meta: true
-    llm_directives:
-      objective: |
-        The user could not resolve a certificate issue through self-service steps.
-        Generate a concise Zoho support ticket summary.
-        Subject: "Certificate Not Generated — <course_name>"
-        Description: include sub-scenario (C1=not generated, C3=incorrect name),
-        course name, enrollment status, completion percentage, completedOn date if known,
-        and a brief summary of what the user tried.
-      priority_override: P4
-    on_complete: confirm_ticket
-    on_restart: ask_certificate_issue
 
   # ===========================================================================
   # C3: Incorrect Name on Certificate (UC-02)
