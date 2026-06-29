@@ -163,10 +163,8 @@ nodes:
           retiredCoursesEnabled: true
     response_mapping:
       - { from: "$.courses", to: collected.all_enrollment_list }
-      - { from: "$.courses", to: collected.apar_picker_list, transform: flatten_apar_courses, transform_ctx_key: collected.all_courses }
-      - { from: "$.courses", to: collected.non_apar_picker_list, transform: flatten_non_apar_courses, transform_ctx_key: collected.all_courses }
-      - { from: "$.courses", to: collected.apar_plans_list, transform: extract_apar_plans, transform_ctx_key: collected.all_courses }
-      - { from: "$.courses", to: collected.non_apar_plans_list, transform: extract_non_apar_plans, transform_ctx_key: collected.all_courses }
+      - { from: "$.courses", to: collected.apar_picker_list, transform: nested_apar_courses, transform_ctx_key: collected.all_courses }
+      - { from: "$.courses", to: collected.non_apar_picker_list, transform: nested_non_apar_courses, transform_ctx_key: collected.all_courses }
     on_success: show_plan_summary
     on_error:
       any: show_plan_summary
@@ -198,8 +196,8 @@ nodes:
       - { id: ok,       label: "✅ Understood, thank you" }
     disable_input: true
     on_reply:
-      apar:     ask_apar_plan
-      non_apar: ask_non_apar_plan
+      apar:     show_apar_courses
+      non_apar: show_non_apar_courses
       ec1:      ec1_ask_course_name
       ec2:      ec2_fetch_profile
       ok:       satisfied
@@ -220,41 +218,18 @@ nodes:
       - { id: non_apar, label: "📘 Non-APAR courses" }
     disable_input: true
     on_reply:
-      apar:     ask_apar_plan
-      non_apar: ask_non_apar_plan
+      apar:     show_apar_courses
+      non_apar: show_non_apar_courses
 
   # ===========================================================================
   # Step 6a — APAR course list  (SOP Step 2.3.2)
   # TODO: update course.courseName / course.lastDate to actual API field names
   # ===========================================================================
-  - id: ask_apar_plan
-    type: collect
-    prompt:
-      text: |
-        🟢 **APAR Training Plans**
-        
-        Tap a plan below to view its courses.
-    field:
-      name: collected.selected_apar_plan_id
-      type: select
-    dynamic_options:
-      source: context
-      context_key: collected.apar_plans_list
-      empty_message: "No APAR training plans were found."
-      response_mapping:
-        id_field: planId
-        label_field: planLabel
-        sub_label_field: planMeta
-    next: show_apar_courses
-
-  # ===========================================================================
-  # Step 6a(2) — APAR course list  (SOP Step 2.3.2)
-  # ===========================================================================
   - id: show_apar_courses
     type: collect
     prompt:
       text: |
-        🟢 **Courses in {{ ctx.collected.selected_apar_plan_id }}**
+        🟢 **APAR Training Plan Courses**
         
         Tap an item below to continue.
     field:
@@ -272,10 +247,6 @@ nodes:
           - { from: planName, to: collected.picker_plan_name }
           - { from: endDate,  to: collected.picker_end_date }
           - { from: statusText, to: collected.picker_status_text }
-      filter_items:
-        field: planName
-        operator: eq
-        value: "{{ ctx.collected.selected_apar_plan_id }}"
     next: share_apar_course_link
 
   - id: share_apar_course_link
@@ -290,34 +261,11 @@ nodes:
   # Step 6b — Non-APAR course list  (SOP Step 2.3.2)
   # TODO: update course.courseName / course.lastDate to actual API field names
   # ===========================================================================
-  - id: ask_non_apar_plan
-    type: collect
-    prompt:
-      text: |
-        📘 **Non-APAR Training Plans**
-        
-        Tap a plan below to view its courses.
-    field:
-      name: collected.selected_non_apar_plan_id
-      type: select
-    dynamic_options:
-      source: context
-      context_key: collected.non_apar_plans_list
-      empty_message: "No Non-APAR training plans were found."
-      response_mapping:
-        id_field: planId
-        label_field: planLabel
-        sub_label_field: planMeta
-    next: show_non_apar_courses
-
-  # ===========================================================================
-  # Step 6b(2) — Non-APAR course list  (SOP Step 2.3.2)
-  # ===========================================================================
   - id: show_non_apar_courses
     type: collect
     prompt:
       text: |
-        📘 **Courses in {{ ctx.collected.selected_non_apar_plan_id }}**
+        📘 **Non-APAR Training Plan Courses**
         
         Tap an item below to continue.
     field:
@@ -335,10 +283,6 @@ nodes:
           - { from: planName, to: collected.picker_plan_name }
           - { from: endDate,  to: collected.picker_end_date }
           - { from: statusText, to: collected.picker_status_text }
-      filter_items:
-        field: planName
-        operator: eq
-        value: "{{ ctx.collected.selected_non_apar_plan_id }}"
     next: share_non_apar_course_link
 
   - id: share_non_apar_course_link

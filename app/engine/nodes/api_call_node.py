@@ -815,6 +815,101 @@ def _extract_non_apar_plans(enrollments: Any, all_courses: Any) -> list[dict]:
     return _extract_cbp_plans(all_courses, is_apar=False)
 
 
+def _nested_cbp_courses(enrollments: Any, all_courses: Any, is_apar: bool) -> list[dict]:
+    """Return nested JSON of Plans containing Courses in the children array."""
+    if not isinstance(all_courses, list):
+        return []
+
+    enrollment_map = {}
+    if isinstance(enrollments, list):
+        for e in enrollments:
+            if isinstance(e, dict) and "courseId" in e:
+                enrollment_map[str(e["courseId"])] = e
+
+    result = []
+    plan_index = 0
+    
+    for plan in all_courses:
+        if not isinstance(plan, dict):
+            continue
+            
+        plan_is_apar = bool(plan.get("isApar"))
+        if plan_is_apar != is_apar:
+            continue
+            
+        plan_index += 1
+        plan_name = f"Plan {plan_index}"
+        plan_end_raw = plan.get("endDate")
+        
+        plan_end = "—"
+        if plan_end_raw:
+            try:
+                import datetime
+                if isinstance(plan_end_raw, (int, float)):
+                    dt = datetime.datetime.fromtimestamp(int(plan_end_raw) / 1000.0, tz=datetime.timezone.utc)
+                else:
+                    raw_str = str(plan_end_raw).replace("Z", "+00:00")
+                    dt = datetime.datetime.fromisoformat(raw_str)
+                plan_end = dt.strftime("%d/%m/%Y")
+            except Exception:
+                plan_end = str(plan_end_raw)
+                
+        content_list = plan.get("contentList")
+        if not isinstance(content_list, list):
+            continue
+            
+        plan_courses = []
+        for course in content_list:
+            if not isinstance(course, dict):
+                continue
+            if course.get("contentType") != "Course":
+                continue
+                
+            course_id = str(course.get("identifier", ""))
+            course_name = str(course.get("name", "Unknown Course"))
+            
+            enrolled_data = enrollment_map.get(course_id)
+            status_text = "Incomplete"
+            
+            if enrolled_data:
+                status_num = _enrollment_status_to_int(enrolled_data.get("status"))
+                if status_num == 2:
+                    status_text = "Completed"
+                else:
+                    completion_pct = enrolled_data.get("completionPercentage")
+                    if completion_pct is not None:
+                        status_text = f"Incomplete ({completion_pct}%)"
+                        
+            plan_courses.append({
+                "courseId": course_id,
+                "courseName": course_name,
+                "combinedMeta": status_text,
+                "extra": {
+                    "planName": plan_name,
+                    "endDate": plan_end,
+                    "statusText": status_text
+                }
+            })
+            
+        if plan_courses:
+            result.append({
+                "courseId": plan_name,
+                "courseName": plan_name,
+                "combinedMeta": f"Ends: {plan_end}" if plan_end != "—" else "",
+                "children": plan_courses
+            })
+            
+    return result
+
+
+def _nested_apar_courses(enrollments: Any, all_courses: Any) -> list[dict]:
+    return _nested_cbp_courses(enrollments, all_courses, is_apar=True)
+
+
+def _nested_non_apar_courses(enrollments: Any, all_courses: Any) -> list[dict]:
+    return _nested_cbp_courses(enrollments, all_courses, is_apar=False)
+
+
 # ---------------------------------------------------------------------------
 # Enrollment count transforms — used by multiple_account flow to summarise
 # the courses list into simple integer counts for display.
@@ -1796,6 +1891,8 @@ _TRANSFORMS: dict[str, Any] = {
     "flatten_non_apar_courses": _flatten_non_apar_courses,
     "extract_apar_plans":       _extract_apar_plans,
     "extract_non_apar_plans":   _extract_non_apar_plans,
+    "nested_apar_courses":      _nested_apar_courses,
+    "nested_non_apar_courses":  _nested_non_apar_courses,
 }
 
 
