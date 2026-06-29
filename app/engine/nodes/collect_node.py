@@ -295,20 +295,80 @@ async def _resolve_dynamic_options(
         mapping   = cfg.get("response_mapping", {})
         id_field    = mapping.get("id_field", "id")
         label_field = mapping.get("label_field", "name")
+        meta_field  = mapping.get("sub_label_field", "")
         extra_fields_cfg = mapping.get("extra_fields", [])
+        filter_items: dict | None = cfg.get("filter_items")
+        
         items: list[PickerItem] = []
         extras_map: dict[str, dict] = {}
         for raw in items_raw:
             if not isinstance(raw, dict):
                 continue
+                
+            if filter_items:
+                fi_field = filter_items.get("field", "")
+                fi_op    = filter_items.get("operator", "gt")
+                fi_val   = filter_items.get("value", 0)
+                if isinstance(fi_val, str) and "{{" in fi_val:
+                    fi_val = _render(fi_val, ctx)
+                raw_val  = _item_get(raw, fi_field)
+                try:
+                    if raw_val is not None:
+                        raw_val = type(fi_val)(raw_val)
+                except (TypeError, ValueError):
+                    raw_val = None
+                include = False
+                if raw_val is not None:
+                    if fi_op == "gt":       include = raw_val > fi_val
+                    elif fi_op == "gte":    include = raw_val >= fi_val
+                    elif fi_op == "lt":     include = raw_val < fi_val
+                    elif fi_op == "lte":    include = raw_val <= fi_val
+                    elif fi_op == "eq":     include = raw_val == fi_val
+                    elif fi_op == "neq":    include = raw_val != fi_val
+                    elif fi_op == "not_null": include = True
+                elif fi_op == "is_null":   include = True
+                if not include:
+                    continue
+
             item_id = raw.get(id_field)
-            label   = raw.get(label_field)
-            if item_id and label:
-                items.append(PickerItem(id=str(item_id), label=str(label)))
-                for ef in extra_fields_cfg:
-                    ef_from, ef_to = ef.get("from", ""), ef.get("to", "")
-                    if ef_from and ef_to and ef_from in raw:
-                        extras_map.setdefault(str(item_id), {})[ef_to.removeprefix("collected.")] = raw[ef_from]
+            label = raw.get(label_field)
+            meta = str(raw[meta_field]) if meta_field and raw.get(meta_field) else None
+            extra = {}
+            for e_map in extra_fields_cfg:
+                from_k = e_map.get("from")
+                if from_k and from_k in raw:
+                    extra[from_k] = raw[from_k]
+                    
+            children_items = None
+            children_raw = raw.get("children")
+            if children_raw and isinstance(children_raw, list):
+                children_items = []
+                for c in children_raw:
+                    if not isinstance(c, dict):
+                        continue
+                    c_id = c.get(id_field)
+                    c_label = c.get(label_field)
+                    if c_id is None or c_label is None:
+                        continue
+                    c_meta = str(c[meta_field]) if meta_field and c.get(meta_field) else None
+                    c_extra = {}
+                    for e_map in extra_fields_cfg:
+                        from_k = e_map.get("from")
+                        if from_k and from_k in c:
+                            c_extra[from_k] = c[from_k]
+                    
+                    for ef in extra_fields_cfg:
+                        ef_from, ef_to = ef.get("from", ""), ef.get("to", "")
+                        if ef_from and ef_to and ef_from in c:
+                            extras_map.setdefault(str(c_id), {})[ef_to.removeprefix("collected.")] = c[ef_from]
+                    
+                    children_items.append(PickerItem(id=str(c_id), label=str(c_label), meta=c_meta, extra=c_extra, children=None))
+
+            items.append(PickerItem(id=str(item_id), label=str(label), meta=meta, extra=extra, children=children_items))
+            for ef in extra_fields_cfg:
+                ef_from, ef_to = ef.get("from", ""), ef.get("to", "")
+                if ef_from and ef_to and ef_from in raw:
+                    extras_map.setdefault(str(item_id), {})[ef_to.removeprefix("collected.")] = raw[ef_from]
         return items, extras_map
 
     if source != "api":
@@ -382,9 +442,12 @@ async def _resolve_dynamic_options(
             fi_field = filter_items.get("field", "")
             fi_op    = filter_items.get("operator", "gt")
             fi_val   = filter_items.get("value", 0)
+            if isinstance(fi_val, str) and "{{" in fi_val:
+                fi_val = _render(fi_val, ctx)
             raw_val  = _item_get(raw, fi_field)
             try:
-                raw_val = type(fi_val)(raw_val)  # coerce to same type as threshold
+                if raw_val is not None:
+                    raw_val = type(fi_val)(raw_val)  # coerce to same type as threshold
             except (TypeError, ValueError):
                 raw_val = None
             include = False

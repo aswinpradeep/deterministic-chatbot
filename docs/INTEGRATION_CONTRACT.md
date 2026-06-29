@@ -187,6 +187,30 @@ All pickers use the same `picker` activity schema — you build **one reusable p
 - On item tap → send `pick_item` with `picker_id`, `item_id`, `item_label`
 - On "Other" tap → show a free-text input → send `request_other` with `other_query`
 
+**Nested Picker (`"type": "nested_picker"`)**
+If the activity type is `"nested_picker"`, the items will contain a `children` array representing hierarchical data (like Courses grouped under Plans).
+```json
+{
+  "type": "nested_picker",
+  "picker_id": "collected.selected_apar_course_id",
+  "placeholder": "Search plans and courses...",
+  "items": [
+    {
+      "id": "plan_1",
+      "label": "Annual Training Plan 2026",
+      "children": [
+        {
+          "id": "do_1144031217479680001241",
+          "label": "Ethics in Public Service",
+          "meta": "Course"
+        }
+      ]
+    }
+  ]
+}
+```
+*Frontend requirement:* Render the top-level items as a collapsible accordion/expansion group. Render the nested `children` as the selectable items. Clicking a child should send back the standard `pick_item` payload with the child's `item_id`.
+
 ---
 
 ### 0.8 End-of-Conversation Banners
