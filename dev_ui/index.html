@@ -293,6 +293,35 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .pick-meta  { font-size: 11px; color: var(--muted); }
 .no-res     { padding: 12px; text-align: center; color: var(--muted); font-size: 12px; }
 
+/* Nested picker groups */
+.pick-parent {
+  padding: 8px 12px; cursor: pointer;
+  display: flex; justify-content: space-between; align-items: center;
+  transition: background .1s;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  font-weight: 500;
+  font-size: 13px; color: var(--text);
+}
+.pick-parent:hover { background: var(--accent-light); }
+.pick-parent-arrow {
+  transition: transform .2s;
+  font-size: 10px; color: var(--muted);
+}
+.pick-parent.open .pick-parent-arrow {
+  transform: rotate(180deg);
+}
+.pick-children {
+  display: none;
+  background: var(--surface);
+}
+.pick-children.open {
+  display: block;
+}
+.pick-children .pick-item {
+  padding-left: 24px;
+}
+
 /* ── Disabled / status strip ─────────────────────────────────────────────── */
 .status-strip {
   text-align: center; padding: 8px 0;
@@ -594,6 +623,7 @@ function renderActivities(activities) {
         break;
 
       case 'picker':
+      case 'nested_picker':
         if (a.content) appendBot(esc(a.content), false);
         nextMode  = 'picker';
         nextPkr   = a;
@@ -664,9 +694,10 @@ function appendUser(text) {
 
 function appendEndBanner(a) {
   const outcome = a.outcome || 'ended';
-  const icons   = { self_served:'✅', ticket_raised:'🎫', ticket_failed:'⚠️', ended:'👋' };
+  if (outcome === 'self_served') return;
+  
+  const icons   = { ticket_raised:'🎫', ticket_failed:'⚠️', ended:'👋' };
   const texts   = {
-    self_served:   'Issue resolved — hope that helped!',
     ticket_raised: 'Ticket raised' + (a.content ? ': ' + a.content : '.'),
     ticket_failed: 'Ticket could not be raised — please email support@igotkarmayogi.gov.in',
     ended:         a.content || 'Conversation ended.',
@@ -724,12 +755,33 @@ function renderQR(a) {
 function renderPicker(a) {
   const items = a.items || [];
   const pid   = 'pl_' + (a.picker_id || 'p');
-  let itemsHtml = items.map(item =>
-    `<div class="pick-item" onclick="doPick('${escA(a.picker_id||'')}','${escA(item.id)}','${escA(item.label)}')">
-       <span class="pick-label">${esc(item.label)}</span>
-       ${item.meta ? `<span class="pick-meta">${esc(item.meta)}</span>` : ''}
-     </div>`
-  ).join('');
+
+  function renderItem(item) {
+    if (item.children && item.children.length > 0) {
+      const cid = 'ch_' + item.id.replace(/[^a-zA-Z0-9]/g, '_');
+      const childrenHtml = item.children.map(c => renderItem(c)).join('');
+      return `
+        <div class="pick-group">
+          <div class="pick-parent" onclick="togglePickGroup('${cid}', this)">
+            <span>${esc(item.label)}</span>
+            <span class="pick-parent-arrow">▼</span>
+          </div>
+          <div class="pick-children" id="${cid}">
+            ${childrenHtml}
+          </div>
+        </div>
+      `;
+    } else {
+      return `
+        <div class="pick-item" onclick="doPick('${escA(a.picker_id||'')}','${escA(item.id)}','${escA(item.label)}')">
+          <span class="pick-label">${esc(item.label)}</span>
+          ${item.meta ? `<span class="pick-meta">${esc(item.meta)}</span>` : ''}
+        </div>
+      `;
+    }
+  }
+
+  let itemsHtml = items.map(item => renderItem(item)).join('');
 
   inputArea().innerHTML = `
     <div class="picker-wrap">
@@ -746,6 +798,14 @@ function renderPicker(a) {
   document.getElementById(pid)?.focus();
 }
 
+function togglePickGroup(id, el) {
+  const childrenDiv = document.getElementById(id);
+  if (childrenDiv) {
+    childrenDiv.classList.toggle('open');
+    el.classList.toggle('open');
+  }
+}
+
 function filterPicker(searchId) {
   const q     = document.getElementById(searchId)?.value.toLowerCase() || '';
   const pkr   = S.pendingPkr;
@@ -754,13 +814,48 @@ function filterPicker(searchId) {
   if (!list) return;
 
   let visible = 0;
-  for (const item of list.querySelectorAll('.pick-item')) {
+
+  // Handle pick-groups
+  for (const group of list.querySelectorAll('.pick-group')) {
+    let groupVisible = false;
+    const parent = group.querySelector('.pick-parent');
+    const parentLbl = parent?.textContent.toLowerCase() || '';
+    const childrenDiv = group.querySelector('.pick-children');
+    const children = group.querySelectorAll('.pick-item');
+    
+    let parentMatch = (!q || parentLbl.includes(q));
+    if (parentMatch && q) groupVisible = true;
+
+    for (const child of children) {
+      const lbl  = child.querySelector('.pick-label')?.textContent.toLowerCase() || '';
+      const meta = child.querySelector('.pick-meta')?.textContent.toLowerCase() || '';
+      const show = !q || parentMatch || lbl.includes(q) || meta.includes(q);
+      child.style.display = show ? '' : 'none';
+      if (show && q) groupVisible = true;
+    }
+    
+    if (!q) {
+      groupVisible = true;
+      childrenDiv?.classList.remove('open');
+      parent?.classList.remove('open');
+    } else if (groupVisible) {
+      childrenDiv?.classList.add('open');
+      parent?.classList.add('open');
+    }
+
+    group.style.display = groupVisible ? '' : 'none';
+    if (groupVisible) visible++;
+  }
+
+  // Handle top-level flat items (not in groups)
+  for (const item of list.querySelectorAll(':scope > .pick-item')) {
     const lbl  = item.querySelector('.pick-label')?.textContent.toLowerCase() || '';
     const meta = item.querySelector('.pick-meta')?.textContent.toLowerCase() || '';
     const show = !q || lbl.includes(q) || meta.includes(q);
     item.style.display = show ? '' : 'none';
     if (show) visible++;
   }
+
   let noRes = list.querySelector('.no-res');
   if (!visible && q) {
     if (!noRes) { noRes = el('div', 'no-res'); list.appendChild(noRes); }
