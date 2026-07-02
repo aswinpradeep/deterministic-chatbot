@@ -232,9 +232,12 @@ nodes:
         🟢 **APAR Training Plan Courses**
         
         Tap an item below to continue.
+      title: "Select Course"
+      placeholder: "Search your enrolled courses..."
     field:
       name: collected.selected_apar_course_id
       type: select
+    show_status: true
     dynamic_options:
       source: context
       context_key: collected.apar_picker_list
@@ -267,9 +270,12 @@ nodes:
         📘 **Non-APAR Training Plan Courses**
         
         Tap an item below to continue.
+      title: "Select Course"
+      placeholder: "Search your enrolled courses..."
     field:
       name: collected.selected_non_apar_course_id
       type: select
+    show_status: true
     dynamic_options:
       source: context
       context_key: collected.non_apar_picker_list

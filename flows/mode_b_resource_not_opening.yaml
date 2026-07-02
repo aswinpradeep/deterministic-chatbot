@@ -126,13 +126,12 @@ nodes:
 
   # ===========================================================================
   # CASE 2: Web Browser / Shared API Path
-  # ===========================================================================
-
-  # Step 1: Select course from enrollment list
+  # ========================================================  # Step 1: Select course from enrollment list
   - id: shared_pick_course
     type: collect
     prompt:
       text: "Please select the course that has the resource not opening:"
+      title: "Select Course"
     field:
       name: collected.course_id
       type: select
@@ -158,7 +157,7 @@ nodes:
       cache_ttl:  300
       on_empty:   no_enrolled_courses_found
     next: api_fetch_hierarchy
-
+ 
   # Step 2: Fetch hierarchy to get resource IDs (Leaf Nodes)
   - id: api_fetch_hierarchy
     type: api_call
@@ -176,12 +175,13 @@ nodes:
     on_success: shared_pick_resource
     on_error:
       any: api_error_fallback
-
+ 
   # Step 3: Select the resource from a searchable list
   - id: shared_pick_resource
     type: collect
     prompt:
       text: "I found the following resources in **{{ ctx.collected.course_name }}**. Which one is not opening?"
+      title: "Select Resource"
     field:
       name: collected.resource_id
       type: select

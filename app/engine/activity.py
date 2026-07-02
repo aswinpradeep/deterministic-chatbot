@@ -114,6 +114,7 @@ class Activity(BaseModel):
             sum(len(item.children) for item in items if item.children)
             if is_nested else len(items)
         )
+        show_status_val = show_status if show_status is not None else True
         return cls(
             type="nested_picker" if is_nested else "picker",
             picker_id=picker_id,
@@ -123,7 +124,7 @@ class Activity(BaseModel):
             disable_input=True,
             total_items=total,
             title=title,
-            show_status=show_status,
+            show_status=show_status_val if is_nested else None,
         )
 
     @classmethod

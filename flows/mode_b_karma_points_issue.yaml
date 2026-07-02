@@ -124,6 +124,7 @@ nodes:
     type: collect
     prompt:
       text: "Here are your recently completed courses. Please select the one for which karma points were not credited:"
+      title: "Select Course"
     field:
       name: collected.kc_course_id
       type: select
@@ -286,6 +287,7 @@ nodes:
     type: collect
     prompt:
       text: "Here are your recently completed events. Please select the event for which karma points were not credited:"
+      title: "Select Event"
     field:
       name: collected.ev_course_id
       type: select
@@ -404,6 +406,7 @@ nodes:
     type: collect
     prompt:
       text: "Please select the course for which you believe you received incorrect karma points:"
+      title: "Select Course"
     field:
       name: collected.ec1_course_id
       type: select

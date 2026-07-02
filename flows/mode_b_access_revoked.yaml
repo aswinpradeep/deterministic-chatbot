@@ -326,6 +326,7 @@ nodes:
     type: collect
     prompt:
       text: "Please select your **Ministry / Department** from the list below:"
+      title: "Select Ministry"
     field:
       name: collected.selected_parent_id
       type: select
@@ -406,6 +407,7 @@ nodes:
     type: collect
     prompt:
       text: "Please select your **State Government** from the list below:"
+      title: "Select State"
     field:
       name: collected.selected_parent_id
       type: select
@@ -466,6 +468,7 @@ nodes:
     type: collect
     prompt:
       text: "Please select your **Department** from the list below:"
+      title: "Select Department"
     field:
       name: collected.selected_dept_id
       type: select
@@ -531,6 +534,7 @@ nodes:
         Please select your **Organization** from the list below:
 
         If you can't find your organisation in the list below, please select **Others** in the dropdown and we'll assist you further.
+      title: "Select Organization"
     field:
       name: collected.selected_org_id
       type: select
