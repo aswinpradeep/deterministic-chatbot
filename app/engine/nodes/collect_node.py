@@ -209,12 +209,18 @@ class CollectNode(NodeHandler):
                         id=other_opt_cfg["id"],
                         label=other_opt_cfg["label"],
                     )
+                show_status = cfg.get("show_status")
+                if show_status is None and dynamic_options:
+                    show_status = dynamic_options.get("show_status")
+                title = prompt_cfg.get("title") if prompt_cfg else None
                 activities.append(
                     Activity.picker(
                         picker_id=field_cfg["name"] if field_cfg else cfg["id"],
                         items=items,
                         placeholder=placeholder,
                         other_option=other_option,
+                        title=title,
+                        show_status=show_status,
                     ).model_dump(exclude_none=True)
                 )
                 # Store per-item extras in collected so pick_item can merge them

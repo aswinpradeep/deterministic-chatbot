@@ -59,6 +59,8 @@ class Activity(BaseModel):
     # picker
     picker_id: str | None = None
     placeholder: str | None = None
+    title: str | None = None
+    show_status: bool | None = Field(default=None, serialization_alias="showStatus")
     items: list[PickerItem] | None = None
     other_option: QuickReply | None = None
     search_enabled: bool = True
@@ -104,6 +106,8 @@ class Activity(BaseModel):
         items: list[PickerItem],
         placeholder: str | None = None,
         other_option: QuickReply | None = None,
+        title: str | None = None,
+        show_status: bool | None = None,
     ) -> Self:
         is_nested = any(bool(item.children) for item in items)
         total = (
@@ -118,6 +122,8 @@ class Activity(BaseModel):
             other_option=other_option,
             disable_input=True,
             total_items=total,
+            title=title,
+            show_status=show_status,
         )
 
     @classmethod
