@@ -323,9 +323,12 @@ nodes:
     type: collect
     prompt:
       text: "You are assigned multiple Comprehensive Assessment Programs (CAPs). Please select the one you would like to access:"
+      title: "Select CAP"
+      placeholder: "Search your assigned CAPs..."
     field:
       name: collected.selected_cap_id
       type: select
+    show_status: false
     dynamic_options:
       source: context
       context_key: collected.all_caps
@@ -406,9 +409,12 @@ nodes:
     type: collect
     prompt:
       text: "You are assigned multiple Comprehensive Assessment Programs (CAPs). Please select the one you would like to access:"
+      title: "Select CAP"
+      placeholder: "Search your assigned CAPs..."
     field:
       name: collected.selected_cap_id
       type: select
+    show_status: false
     dynamic_options:
       source: context
       context_key: collected.all_caps
@@ -644,9 +650,12 @@ nodes:
     type: collect
     prompt:
       text: "You are assigned multiple Comprehensive Assessment Programs (CAPs). Please select the one you are trying to complete:"
+      title: "Select CAP"
+      placeholder: "Search your assigned CAPs..."
     field:
       name: collected.selected_cap_id
       type: select
+    show_status: false
     dynamic_options:
       source: api
       integration: karmayogi
@@ -749,9 +758,12 @@ nodes:
     type: collect
     prompt:
       text: "Please select the course and pending resource you would like to complete:"
+      title: "Select Course"
+      placeholder: "Search your enrolled courses..."
     field:
       name: collected.selected_pending_course_id
       type: select
+    show_status: false
     dynamic_options:
       source: context
       context_key: collected.cap_incomplete_courses_picker
@@ -775,14 +787,14 @@ nodes:
       text: |
         Upon checking, we found that all prerequisite courses have been completed successfully.
 
-        Since the Final Assessment is still locked, kindly select the type of issue you are facing below so we can assist you further.
+        Since the Final Assessment is still locked, kindly select the type of issue you are facing below so we can assist you further:
     quick_replies:
-      - { id: incomplete_ack, label: "👍 Got it" }
-      - { id: locked, label: "🔒 Help me unlock it" }
+      - { id: mobile, label: "📱 Unable to access from Mobile" }
+      - { id: other,  label: "Any Other Error" }
     disable_input: true
     on_reply:
-      incomplete_ack: satisfied
-      locked: branch_check_incomplete_children
+      mobile: cap_assessment_mobile_guidance
+      other: cap_other_error_guidance
 
   - id: branch_check_incomplete_children
     type: branch

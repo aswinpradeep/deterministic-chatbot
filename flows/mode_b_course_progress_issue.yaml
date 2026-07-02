@@ -81,6 +81,7 @@ nodes:
     type: collect
     prompt:
       text: "Kindly search and select the relevant **Course / Program** for which you are facing the progress update or certificate generation issue:"
+      title: "Select Course"
     field:
       name: collected.course_id
       type: select
