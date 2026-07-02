@@ -185,6 +185,7 @@ nodes:
     type: collect
     prompt:
       text: "Please select your designation from the list below:"
+      title: "Select Designation"
     field:
       name: collected.designation_selected_id
       type: select
@@ -533,6 +534,7 @@ nodes:
         Please select your **mother tongue** from the list:
         
         **Note:** If you cannot find your language in the dropdown, please select **Others**
+      title: "Select Mother Tongue"
     field:
       name: collected.mother_tongue_verified
       type: select
@@ -878,6 +880,7 @@ nodes:
     type: collect
     prompt:
       text: "Please select your service from the list below:"
+      title: "Select Service"
     field:
       name: collected.service_selected_name
       type: select
