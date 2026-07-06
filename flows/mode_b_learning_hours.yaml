@@ -100,7 +100,7 @@ nodes:
 
         Karmayogi Bharat and DoPT do not manage or operate the Shiksha Path portal.
 
-        Kindly coordinate directly with the **Directorate of Training / CBDT team** for any Shiksha Path-related issues.
+        Please coordinate directly with the **Directorate of Training / CBDT team** for any Shiksha Path-related issues.
 
         **Support Contact**
         **Email ID:** aed4.training@incometax.gov.in
@@ -159,7 +159,7 @@ nodes:
     type: message
     prompt:
       text: |
-        We were unable to retrieve your profile details at this moment.
+        We couldn't retrieve your profile details at this moment.
         Please try again after some time.
     next: satisfied
 
@@ -187,11 +187,11 @@ nodes:
     type: message
     prompt:
       text: |
-        Upon checking, we found that your **eHRMS ID** and **External System Name** are available in the system.
+        We checked, and found that your **eHRMS ID** and **External System Name** are available in the system.
 
-        As the required mapping details are already present from our end, we request you to connect with the **respective eHRMS support team** for further investigation.
+        Since the required mapping details are already present from our end, please connect with the **respective eHRMS support team** for further investigation.
 
-        Kindly share your details with the eHRMS support team when reaching out:
+        Please share your details with the eHRMS support team when reaching out:
     next: collect_user_details_for_ehrms
 
   - id: collect_user_details_for_ehrms
@@ -244,11 +244,11 @@ nodes:
     type: message
     prompt:
       text: |
-        Upon checking, we found that your **eHRMS ID** is not available in the system.
+        We checked, and found that your **eHRMS ID** is not available in the system.
 
         The eHRMS ID cannot be updated by individual users. It must be updated by the **MDO of your organization**.
 
-        Kindly connect with the below MDO and request them to update your eHRMS ID:
+        Please connect with the MDO below and request them to update your eHRMS ID:
 
         **Organization:** {{ ctx.collected.org_channel | default('—') }}
         **MDO Name:** {{ ctx.collected.mdo_admin_name | default('—') }}
@@ -262,11 +262,11 @@ nodes:
     type: message
     prompt:
       text: |
-        Upon checking, we found that your **eHRMS ID** is available; however, the **External System Name** is not updated in the system.
+        We checked, and found that your **eHRMS ID** is available; however, the **External System Name** is not updated in the system.
 
         The External System Name is mandatory for synchronization with eHRMS and can only be updated by the **MDO / Administrator**.
 
-        Kindly connect with the below MDO and request them to update the External System Name:
+        Please connect with the MDO below and request them to update the External System Name:
 
         **Organization:** {{ ctx.collected.org_channel | default('—') }}
         **MDO Name:** {{ ctx.collected.mdo_admin_name | default('—') }}
@@ -280,7 +280,7 @@ nodes:
     type: message
     prompt:
       text: |
-        Upon checking, we could not find an MDO Admin mapped to your organization (**{{ ctx.collected.org_channel | default('your organization') }}**).
+        We checked, and couldn't find an MDO Admin mapped to your organization (**{{ ctx.collected.org_channel | default('your organization') }}**).
 
         Please try again after some time.
     next: satisfied
@@ -290,7 +290,7 @@ nodes:
     type: message
     prompt:
       text: |
-        We encountered an issue while fetching MDO details for your organization.
+        We ran into an issue while fetching MDO details for your organization.
         Please try again after some time.
     next: satisfied
 
@@ -299,9 +299,9 @@ nodes:
     type: message
     prompt:
       text: |
-        Upon checking, we found that no APAR/CAP is currently assigned to your profile.
+        We checked, and found that no APAR/CAP is currently assigned to your profile.
 
-        Kindly connect with the below YP/AM for further assistance:
+        Please connect with the YP/AM below for further assistance:
 
         **Name:** {{ ctx.collected.yp_name | default('—') }}
         **Email ID:** {{ ctx.collected.yp_email | default('—') }}
@@ -316,7 +316,7 @@ nodes:
     type: message
     prompt:
       text: |
-        Upon checking, we could not find the YP/AM contact for your organization.
+        We checked, and couldn't find the YP/AM contact for your organization.
 
         Please try again after some time.
     next: satisfied
@@ -369,7 +369,7 @@ nodes:
     type: message
     prompt:
       text: |
-        We were unable to find your profile details in the system. Please try again after some time.
+        We couldn't find your profile details in the system. Please try again after some time.
     next: satisfied
 
   # Step 3.3 — User mapped to iGOT / Karmayogi Prarambh Trainee
@@ -377,11 +377,11 @@ nodes:
     type: message
     prompt:
       text: |
-        Upon checking, we found that your profile is currently mapped to **{{ ctx.collected.org_name | default('iGOT / Karmayogi Prarambh Trainee') }}**.
+        We checked, and found that your profile is currently mapped to **{{ ctx.collected.org_name | default('iGOT / Karmayogi Prarambh Trainee') }}**.
 
-        APAR courses and training plans are assigned only after a user is mapped to their correct department/organization. As your profile is currently not mapped to the correct organization, no APAR courses or training plans can be assigned at this stage.
+        APAR courses and training plans are assigned only after a user is mapped to their correct department/organization. Since your profile isn't mapped to the correct organization yet, no APAR courses or training plans can be assigned at this stage.
 
-        Kindly raise a **Transfer Request** to move your profile to the appropriate organization.
+        You'll need to raise a **Transfer Request** to move your profile to the appropriate organization.
     next: sp_guide_transfer_request
 
   - id: sp_guide_transfer_request
@@ -441,13 +441,13 @@ nodes:
     type: message
     prompt:
       text: |
-        As checked, your profile is currently verified with the following details:
+        We checked, and your profile is currently verified with the following details:
 
         - **Organization:** {{ ctx.collected.org_name | default(ctx.collected.org_channel) | default('—') }}
         - **Designation:** {{ ctx.collected.user_designation | default('—') }}
         - **Group:** {{ ctx.collected.user_group | default('—') }}
 
-        Kindly confirm whether these details are correct.
+        Could you confirm whether these details are correct?
     quick_replies:
       - { id: YES, label: "✅ Yes, details are correct" }
       - { id: NO,  label: "❌ No, details are incorrect" }
@@ -460,7 +460,7 @@ nodes:
   - id: sp_ask_incorrect_detail
     type: message
     prompt:
-      text: "Kindly confirm which of the following details are incorrect:"
+      text: "Could you confirm which of the following details is incorrect:"
     quick_replies:
       - { id: ORG,   label: "🏢 Organization / Department" }
       - { id: DESIG, label: "📋 Designation" }
@@ -509,7 +509,7 @@ nodes:
     type: message
     prompt:
       text: |
-        Kindly update the required profile details and recheck the APAR courses/training plans after the updates are completed.
+        Please update the required profile details and recheck the APAR courses/training plans after the updates are completed.
 
         Thank you for reaching out! 🙏
     next: satisfied
@@ -599,9 +599,9 @@ nodes:
     outcome: self_served
     prompt:
       text: |
-        Upon checking, we found that your APAR courses have been assigned; however, the **CAP assessment** has not yet been passed.
+        We checked, and found that your APAR courses have been assigned; however, the **CAP assessment** has not yet been passed.
 
-        Kindly reattempt and successfully pass the **CAP assessment**. Reflection in SPARROW/APAR occurs only after successful completion of the required courses and assessment.
+        Please reattempt and pass the **CAP assessment**. Reflection in SPARROW/APAR occurs only after successful completion of the required courses and assessment.
 
         Thank you for reaching out! 🙏
 
@@ -629,14 +629,14 @@ nodes:
       text: |
         It may take up to **24 hours** for the completion data to reflect in SPARROW.
 
-        Kindly check again after 24 hours. Thank you for your patience! 🙏
+        Please check again after 24 hours. Thank you for your patience! 🙏
 
   # Step 4.5.3 — More than 24 hours: check email match
   - id: sp_check_email_match
     type: message
     prompt:
       text: |
-        Kindly confirm: is the **email ID registered on SPARROW** the same as your **iGOT email ID**?
+        Could you confirm whether the **email ID registered on SPARROW** is the same as your **iGOT email ID**?
     quick_replies:
       - { id: YES, label: "✅ Yes, same email ID" }
       - { id: NO,  label: "❌ No, different email ID" }
@@ -651,7 +651,7 @@ nodes:
     outcome: self_served
     prompt:
       text: |
-        Since both email IDs are the same and the data is still not reflecting after 24 hours, kindly contact the **SPARROW support team** directly:
+        Since both email IDs are the same and the data is still not reflecting after 24 hours, please contact the **SPARROW support team** directly:
 
         **SPARROW Support Email:** support-sparrow@gov.in
 
@@ -665,7 +665,7 @@ nodes:
       text: |
         Since the email IDs are different, the iGOT training data may not be automatically linked to your SPARROW account.
 
-        Kindly refer to the video guide below for instructions on how to fetch iGOT training data into SPARROW APAR:
+        Please refer to the video guide below for instructions on how to fetch iGOT training data into SPARROW APAR:
     action_button:
       label: "📹 How to Fetch iGOT Training Data into SPARROW APAR"
       url: "https://tarento-my.sharepoint.com/personal/soniya_chugh_tarento_com/_layouts/15/stream.aspx?id=%2Fpersonal%2Fsoniya%5Fchugh%5Ftarento%5Fcom%2FDocuments%2FMicrosoft%20Teams%20Chat%20Files%2FHow%20to%20Fetch%20iGOT%20Training%20Data%20into%20SPARROW%20APAR%5FV8%201%2Emp4&referrer=StreamWebApp%2EWeb&referrerScenario=AddressBarCopied%2Eview%2E4cd905b0%2Da0b7%2D40cc%2Dbc5b%2D7818d1639509&ga=1"
@@ -675,9 +675,9 @@ nodes:
     type: message
     prompt:
       text: |
-        Upon checking, we found that **no APAR/CAP is currently assigned** to your profile.
+        We checked, and found that **no APAR/CAP is currently assigned** to your profile.
 
-        Training plans and APAR courses are assigned by the concerned authority. Kindly connect with the below MDO for further assistance:
+        Training plans and APAR courses are assigned by the concerned authority. Please connect with the MDO below for further assistance:
 
         **Organization:** {{ ctx.collected.org_channel | default('—') }}
         **MDO Name:** {{ ctx.collected.mdo_admin_name | default('—') }}
@@ -694,9 +694,9 @@ nodes:
     type: message
     prompt:
       text: |
-        Upon checking, we found that your profile is currently **not verified** on iGOT Karmayogi.
+        We checked, and found that your profile is currently **not verified** on iGOT Karmayogi.
 
-        APAR training plans are assigned only after your profile is verified. Let me check a few more details to assist you further.
+        APAR training plans are assigned only after your profile is verified. Let me check a few more details to help you further.
     next: sp_ask_all_india_services
 
   # Step 6.1 — All India Services eligibility check
@@ -704,7 +704,7 @@ nodes:
     type: message
     prompt:
       text: |
-        Kindly confirm whether you belong to any of the **All India Services**:
+        Could you confirm whether you belong to any of the **All India Services**:
 
         - IAS
         - IPS
@@ -742,7 +742,7 @@ nodes:
         - Batch Information
         - Central Deputation Details
 
-        Kindly update the required details in your profile. Once updated successfully, the APAR plans may reflect in your account within approximately **2–3 hours**.
+        Please update the required details in your profile. Once updated, the APAR plans should reflect in your account within approximately **2–3 hours**.
 
         Thank you for reaching out! 🙏
 
@@ -751,7 +751,7 @@ nodes:
     type: resolution
     prompt:
       text: |
-        As your profile is currently not verified, kindly complete the **profile verification process** by following the steps below:
+        Since your profile isn't verified yet, please complete the **profile verification process** by following the steps below:
     steps:
       - "Log in to **iGOT Karmayogi** → **View Profile**."
       - "Navigate to **Primary Details** → click the ✏️ **Edit** icon."
@@ -768,13 +768,13 @@ nodes:
       text: |
         Once the profile is successfully verified, the APAR courses and training plans may reflect in your account.
 
-        Kindly recheck the APAR section after the profile verification is completed. Thank you! 🙏
+        Please recheck the APAR section after the profile verification is complete. Thank you! 🙏
 
   # Generic API error for SPARROW path
   - id: sp_api_error
     type: message
     prompt:
       text: |
-        We encountered a technical issue while fetching your profile details.
+        We ran into a technical issue while fetching your profile details.
         Please try again after some time. Thank you for your patience.
     next: satisfied

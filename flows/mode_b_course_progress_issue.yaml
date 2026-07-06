@@ -80,7 +80,7 @@ nodes:
   - id: pick_course_from_list
     type: collect
     prompt:
-      text: "Kindly search and select the relevant **Course / Program** for which you are facing the progress update or certificate generation issue:"
+      text: "Please search and select the relevant **Course / Program** you're facing the progress update or certificate generation issue with:"
       title: "Select Course"
     field:
       name: collected.course_id
@@ -184,7 +184,7 @@ nodes:
       text: |
         Your certificate for **{{ ctx.collected.course_name }}** has already been generated. 🎉
 
-        Kindly check your profile under the **Certificates** section.
+        Please check your profile under the **Certificates** section.
     next: satisfied
 
   # ===========================================================================
@@ -389,7 +389,7 @@ nodes:
     type: message
     prompt:
       text: |
-        Understood. Please feel free to reach out if you require any further assistance.
+        Understood. Please feel free to reach out if you need any further assistance.
     next: satisfied
 
   # Collect email before raising ticket for technical issue
@@ -548,13 +548,13 @@ nodes:
     type: message
     prompt:
       text: |
-        We have completed re-validation of your progress for **{{ ctx.collected.course_name }}**.
+        We've completed re-validation of your progress for **{{ ctx.collected.course_name }}**.
 
         No technical issue was identified, but the certificate has still not been generated.
 
-        We are escalating this issue internally to the concerned team for further investigation.
+        We're escalating this issue internally to the concerned team for further investigation.
 
-        Please feel free to reach out if you require any further assistance.
+        Please feel free to reach out if you need any further assistance.
     next: satisfied
 
   # ===========================================================================
@@ -661,7 +661,7 @@ nodes:
 
         This resource is in **SCORM format**.
 
-        Kindly follow the below instructions carefully:
+        Please follow the instructions below carefully:
 
         - Complete the resource in **one continuous session**.
         - **Do not increase the playback speed** while viewing the content.
@@ -704,7 +704,7 @@ nodes:
 
         {{ ctx.collected.incomplete_resource_names }}
 
-        Kindly revisit and complete the pending resource(s).
+        Please revisit and complete the pending resource(s).
     steps:
       - "Go to **Profile**."
       - "Open **My Learning**."
@@ -736,7 +736,7 @@ nodes:
 
         However, the assessment is still pending.
 
-        Kindly complete the assessment to achieve 100% completion.
+        Please complete the assessment to achieve 100% completion.
     steps:
       - "Go to **Profile** → **My Learning** → **In Progress**"
       - "Open **{{ ctx.collected.course_name }}** → click **Resume**"
@@ -773,7 +773,7 @@ nodes:
     type: resolution
     prompt:
       text: |
-        Kindly try completing the assessment through the web portal by following the below steps.
+        Please try completing the assessment through the web portal by following the steps below.
     steps:
       - "Open Google Chrome or any web browser."
       - "Search for iGOT Karmayogi."
@@ -814,9 +814,9 @@ nodes:
     type: message
     prompt:
       text: |
-        Upon verification, you still have {{ ctx.collected.remaining_attempts }} attempt(s) remaining.
+        We've verified that you still have {{ ctx.collected.remaining_attempts }} attempt(s) remaining.
 
-        Kindly retry the assessment.
+        Please retry the assessment.
     next: satisfied
 
   - id: assessment_limit_auto_ticket
@@ -840,7 +840,7 @@ nodes:
     type: message
     prompt:
       text: |
-        We have verified that the assessment attempt limit has been exceeded.
+        We've verified that the assessment attempt limit has been exceeded.
 
         A support ticket (Ticket ID: #{{ ctx.collected.ticket_id }}) has been raised and shared with the concerned team for further investigation.
     next: satisfied
@@ -877,7 +877,7 @@ nodes:
     type: message
     prompt:
       text: |
-        We have captured the reported error and raised a support ticket (Ticket ID: #{{ ctx.collected.ticket_id }}) for further investigation.
+        We've captured the reported error and raised a support ticket (Ticket ID: #{{ ctx.collected.ticket_id }}) for further investigation.
     next: satisfied
   # ===========================================================================
   # SECTION 13 — Engineering Excel Remarks Handling
@@ -902,7 +902,7 @@ nodes:
       text: |
         Your certificate has been generated successfully. 🎉
 
-        Kindly check your profile under the **Certificates** section.
+        Please check your profile under the **Certificates** section.
     next: satisfied
 
   # Remark 2 — Sync Completed, Course is Incomplete (Section 13.2)
@@ -994,11 +994,11 @@ nodes:
     type: message
     prompt:
       text: |
-        Upon revalidation, we found that the following resource(s) are still **incomplete**:
+        We've revalidated, and found that the following resource(s) are still **incomplete**:
 
         {{ ctx.collected.incomplete_resource_names }}
 
-        Kindly complete the above resource(s) to achieve **100% completion** and enable certificate generation.
+        Please complete the resource(s) above to achieve **100% completion** and enable certificate generation.
     next: satisfied
 
   # Remark 3 — Failed (Section 13.3)
@@ -1006,11 +1006,11 @@ nodes:
     type: message
     prompt:
       text: |
-        Upon checking, we found that the issue could not be resolved successfully.
+        We checked, and found that the issue could not be resolved successfully.
 
         The issue has been shared with the concerned team for further investigation.
 
-        We apologise for the inconvenience. Please feel free to reach out if you require any further assistance.
+        We apologise for the inconvenience. Please feel free to reach out if you need any further assistance.
     next: satisfied
 
   # ===========================================================================
@@ -1098,7 +1098,7 @@ nodes:
 
         Once all mandatory resources are completed successfully, the certificate will be generated.
 
-        Please feel free to reach out if you require any further assistance.
+        Please feel free to reach out if you need any further assistance.
     next: satisfied
 
   - id: progress_pending_end
@@ -1107,7 +1107,7 @@ nodes:
       text: |
         No problem! Please complete the pending resource(s) at your convenience.
 
-        **Important:** Kindly complete all pending resources to achieve **100% completion**. Once all mandatory resources are completed successfully, the certificate will be generated automatically.
+        **Important:** Please complete all pending resources to achieve **100% completion**. Once all mandatory resources are completed successfully, the certificate will be generated automatically.
 
         If the issue persists, please start a new session and choose **Course / Program / Event progress issue**.
     next: satisfied

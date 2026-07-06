@@ -80,7 +80,7 @@ nodes:
     type: resolution
     prompt:
       text: |
-        It appears that the resource is not supported on the mobile application. Kindly try consuming the course using a desktop or laptop browser.
+        It looks like this resource isn't supported on the mobile application. Please try accessing the course using a desktop or laptop browser instead.
     steps:
       - "Open Google Chrome browser on your desktop or laptop."
       - "In the address bar, type **iGOT Karmayogi** and press Enter."
@@ -398,7 +398,7 @@ nodes:
     type: message
     prompt:
       text: |
-        We could not find any resources in the selected course.
+        We couldn't find any resources in the selected course.
 
         If you believe this is incorrect, please try again after some time or raise a support ticket.
     next: satisfied

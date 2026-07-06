@@ -220,7 +220,7 @@ nodes:
       text: |
         The Email ID **{{ ctx.collected.new_identifier }}** cannot be updated because its domain is **not whitelisted** on the iGOT Karmayogi platform.
 
-        Kindly contact your **MDO Leader** for further clarification and to request domain addition:
+        Please contact your **MDO Leader** for further clarification and to request domain addition:
 
         👤 **{{ ctx.collected.mdo_leader_name or ctx.collected.mdo_leader_name_fallback }} {{ ctx.collected.mdo_leader_surname or '' }}**
         📧 {{ ctx.collected.mdo_leader_email or ctx.collected.mdo_leader_email_fallback }}
@@ -252,7 +252,7 @@ nodes:
       text: |
         The Email ID **{{ ctx.collected.new_identifier }}** cannot be updated because its domain is **not whitelisted** on the iGOT Karmayogi platform.
 
-        Kindly contact the **Young Professional (YP)** assigned to your state/department/organisation for further clarification.
+        Please contact the **Young Professional (YP)** assigned to your state/department/organisation for further clarification.
 
   - id: domain_invalid_no_mdo
     type: end
@@ -261,7 +261,7 @@ nodes:
       text: |
         The Email ID **{{ ctx.collected.new_identifier }}** cannot be updated because its domain is **not whitelisted** on the iGOT Karmayogi platform.
 
-        Kindly contact your **MDO Leader** or the **Young Professional (YP)** assigned to your organisation for further assistance.
+        Please contact your **MDO Leader** or the **Young Professional (YP)** assigned to your organisation for further assistance.
 
   # ===========================================================================
   # STEP 3 — Fetch current user's profile to compare identifier
@@ -329,7 +329,7 @@ nodes:
       text: |
         **Verification Temporarily Unavailable**
 
-        We are currently unable to verify whether the **{{ ctx.collected.new_identifier }}** is already registered due to a temporary issue.
+        We're currently unable to verify whether **{{ ctx.collected.new_identifier }}** is already registered due to a temporary issue.
 
         Please try again in a moment.
     quick_replies:
@@ -381,7 +381,7 @@ nodes:
       text: |
         The **{{ ctx.collected.new_identifier }}** is not registered to any other account on the platform.
 
-        Kindly follow the below steps to update your {{ 'Email ID' if ctx.collected.update_type == 'EMAIL' else 'Mobile Number' }}:
+        Please follow the steps below to update your {{ 'Email ID' if ctx.collected.update_type == 'EMAIL' else 'Mobile Number' }}:
 
         1. Go to **View Profile**
         2. Open **Other Details**
@@ -473,7 +473,7 @@ nodes:
     outcome: self_served
     prompt:
       text: |
-        If you are not receiving the OTP, kindly connect with the below contact for further assistance:
+        If you're not receiving the OTP, please connect with the contact below for further assistance:
 
         👤 **{{ ctx.collected.mdo_leader_name or ctx.collected.mdo_leader_name_fallback }} {{ ctx.collected.mdo_leader_surname or '' }}**
         📧 {{ ctx.collected.mdo_leader_email or ctx.collected.mdo_leader_email_fallback }}
@@ -499,7 +499,7 @@ nodes:
     outcome: self_served
     prompt:
       text: |
-        If you are not receiving the OTP, kindly connect with the below contact for further assistance:
+        If you're not receiving the OTP, please connect with the contact below for further assistance:
 
         👤 **{{ ctx.collected.yp_name }}**
         📧 {{ ctx.collected.yp_email }}
@@ -510,7 +510,7 @@ nodes:
     outcome: self_served
     prompt:
       text: |
-        If you are not receiving the OTP, kindly contact the **Young Professional (YP)** or **MDO Leader** assigned to your organisation for further assistance.
+        If you're not receiving the OTP, please contact the **Young Professional (YP)** or **MDO Leader** assigned to your organisation for further assistance.
 
   # ===========================================================================
   # STEP 4 — Identifier ALREADY registered → fetch conflict account enrollments
