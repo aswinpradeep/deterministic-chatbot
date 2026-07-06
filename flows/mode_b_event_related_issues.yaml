@@ -77,6 +77,7 @@ nodes:
     type: collect
     prompt:
       text: "Kindly search and select the relevant event from your enrolled events list for which you are unable to view the video."
+      title: "Select Event"
     field:
       name: collected.event_id
       type: select
@@ -102,6 +103,7 @@ nodes:
     type: collect
     prompt:
       text: "Kindly search and select the relevant event from your enrolled events list for which the video is not playing."
+      title: "Select Event"
     field:
       name: collected.event_id
       type: select
@@ -127,6 +129,7 @@ nodes:
     type: collect
     prompt:
       text: "Kindly search and select the relevant event from your enrolled events list for which the progress is not updating."
+      title: "Select Event"
     field:
       name: collected.event_id
       type: select
@@ -153,6 +156,7 @@ nodes:
     type: collect
     prompt:
       text: "Kindly search and select the relevant event from your enrolled events list for which you are unable to download the certificate."
+      title: "Select Event"
     field:
       name: collected.event_id
       type: select
