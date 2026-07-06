@@ -760,6 +760,7 @@ Same fields as `markdown` but render as plain text — no Markdown parsing.
 {
   "type": "picker",
   "picker_id": "course_picker",
+  "title": "Select a Course",
   "placeholder": "Search your course...",
   "search_enabled": true,
   "total_items": 42,
@@ -787,6 +788,7 @@ Same fields as `markdown` but render as plain text — no Markdown parsing.
 |-------|------|-----------------|-------------|
 | `type` | `"picker"` | ✅ | |
 | `picker_id` | string | ✅ | Send back in `pick_item.picker_id` |
+| `title` | string | ✅ | Title for the picker component |
 | `placeholder` | string | ✅ | Search box hint text |
 | `search_enabled` | bool | ✅ | Show search/filter input if true |
 | `total_items` | integer | ✅ | Total number of items available (before pagination). Use this to show a count badge or pre-emptively detect an empty state. Always ≥ 0; `items[]` may be a page-sized slice. |
@@ -828,8 +830,10 @@ Same fields as `markdown` but render as plain text — no Markdown parsing.
 {
   "type": "nested_picker",
   "picker_id": "collected.selected_apar_course_id",
+  "title": "Select a Plan and Course",
   "placeholder": "Search plans and courses...",
   "search_enabled": true,
+  "showStatus": true,
   "total_items": 5,
   "items": [
     {
@@ -861,8 +865,10 @@ Same fields as `markdown` but render as plain text — no Markdown parsing.
 |-------|------|-----------------|-------------|
 | `type` | `"nested_picker"` | ✅ | |
 | `picker_id` | string | ✅ | Send back in `pick_item.picker_id` |
+| `title` | string | ✅ | Title for the picker component |
 | `placeholder` | string | ✅ | Search box hint text |
 | `search_enabled` | bool | ✅ | Show search/filter input if true |
+| `showStatus` | bool \| null | ❌ | If false, explicitly hide the progress status for child items (even if `progress` object is present). Defaults to true for nested pickers. |
 | `total_items` | integer | ✅ | Total count of selectable **leaf (child)** items across all groups — not the group count. Use for a count badge. Always ≥ 1 (zero-item case is never sent). |
 | `items` | array | ✅ | Top-level group headers — **not selectable** |
 | `items[].id` | string | ✅ | Group identifier (not sent back) |

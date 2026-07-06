@@ -49,11 +49,6 @@ entry_node: fetch_transfer_status
 
 imports:
   - _terminal
-  - fragment: _zoho_ticket
-    with:
-      cf_category:     profile
-      cf_sub_category: access_revoked
-      cf_flow_id:      ACCESS_REVOKED
   - fragment: _yp_lookup
 
 nodes:
@@ -82,6 +77,8 @@ nodes:
       - { from: "$.response.content[0].wfTransferRequest.wfId",           to: collected.wf_transfer_id }
       - { from: "$.response.content[0].wfTransferRequest.departmentName", to: collected.transfer_dept_name }
       - { from: "$.response.content[0].wfTransferRequest.rootOrgId",      to: collected.transfer_root_org_id }
+      - { from: "$.response.content[0].wfTransferRequest.orgId",          to: collected.transfer_org_id }
+      - { from: "$.response.content[0].wfTransferRequest.organisationId", to: collected.transfer_organisation_id }
       - { from: "$.response.content[0].wfTransferRequest.orgName",        to: collected.transfer_org_name }
       # Extract org details from user's organisations array (used as fallback when wfTransferRequest.rootOrgId is null)
       - { from: "$.response.content[0].organisations[0].orgName",          to: collected.profile_org_name }
@@ -115,9 +112,12 @@ nodes:
       body:
         request:
           filters:
-            # If ID is missing, fallback to searching by name.
-            rootOrgId: "{{ ctx.collected.transfer_root_org_id or ctx.collected.wf_transfer_request.orgId or ctx.collected.wf_transfer_request.organisationId or '' }}"
-            orgName: "{{ '' if ctx.collected.transfer_root_org_id else (ctx.collected.transfer_org_name or ctx.collected.transfer_dept_name) }}"
+            "{{ 'id' if (ctx.collected.transfer_root_org_id or ctx.collected.transfer_org_id or ctx.collected.transfer_organisation_id) else 'orgName' }}": >
+              {{
+                (ctx.collected.transfer_root_org_id or ctx.collected.transfer_org_id or ctx.collected.transfer_organisation_id)
+                if (ctx.collected.transfer_root_org_id or ctx.collected.transfer_org_id or ctx.collected.transfer_organisation_id)
+                else (ctx.collected.transfer_org_name or ctx.collected.transfer_dept_name)
+              }}
           limit: 1
     response_mapping:
       - { from: "$.response.content[0].orgName", to: collected.fetched_org_name }
@@ -158,15 +158,9 @@ nodes:
     on_reply:
       save_to: collected.org_confirmed
       # SOP Step 2.3: Once User Confirms Organization
-      yes: check_mdo_root_org
+      yes: fetch_mdo_admin_details
       # SOP Step 5.5: Cancel Request (If Required)
       no:  cancel_and_reraise_guide
-
-  - id: check_mdo_root_org
-    type: branch
-    rules:
-      - { if: "(ctx.collected.fetched_root_org_id or ctx.collected.transfer_root_org_id)", then: fetch_mdo_admin_details }
-    default: start_yp_lookup
 
   # SOP 2.3: Identify Concerned MDO Admin/Leader
   - id: fetch_mdo_admin_details
@@ -180,7 +174,7 @@ nodes:
           filters:
             # Always search for MDO in the organisation the transfer request was raised to.
             # If the ID was missing in the transfer request, use the one we just fetched.
-            rootOrgId: "{{ ctx.collected.fetched_root_org_id or ctx.collected.transfer_root_org_id or ctx.collected.wf_transfer_request.orgId }}"
+            rootOrgId: "{{ ctx.collected.fetched_root_org_id or ctx.collected.transfer_root_org_id or ctx.collected.transfer_org_id or ctx.collected.transfer_organisation_id or '' }}"
             organisations.roles: ["MDO_ADMIN"]
             status: 1
           limit: 1
@@ -319,7 +313,7 @@ nodes:
   - id: branch_on_ministries_count
     type: branch
     rules:
-      - { if: "not has(ctx.collected.parent_list)", then: notify_yp_lookup }
+      - { if: "not has(ctx.collected.parent_list)", then: start_yp_lookup }
     default: ministry_picker
 
   - id: ministry_picker
@@ -340,7 +334,7 @@ nodes:
           - { from: channel, to: collected.selected_parent_name }
       search: { enabled: true, placeholder: "Search ministry..." }
       empty_message: "No ministry found."
-    on_empty: notify_yp_lookup
+    on_empty: start_yp_lookup
     next: fetch_ministry_departments
 
   # Fetch departments for a selected Ministry (use levelZeroOrgId = selected ministry id)
@@ -400,7 +394,7 @@ nodes:
   - id: branch_on_states_count
     type: branch
     rules:
-      - { if: "not has(ctx.collected.parent_list)", then: notify_yp_lookup }
+      - { if: "not has(ctx.collected.parent_list)", then: start_yp_lookup }
     default: state_picker
 
   - id: state_picker
@@ -421,7 +415,7 @@ nodes:
           - { from: channel, to: collected.selected_parent_name }
       search: { enabled: true, placeholder: "Search state..." }
       empty_message: "No state found."
-    on_empty: notify_yp_lookup
+    on_empty: start_yp_lookup
     next: fetch_state_departments
 
   # Fetch departments for a selected State (use levelZeroOrgId = selected state id)
@@ -461,7 +455,7 @@ nodes:
   - id: branch_on_state_depts_count
     type: branch
     rules:
-      - { if: "not has(ctx.collected.state_departments) or len(ctx.collected.state_departments) == 0", then: notify_yp_lookup }
+      - { if: "not has(ctx.collected.state_departments) or len(ctx.collected.state_departments) == 0", then: start_yp_lookup }
     default: state_dept_picker
 
   - id: state_dept_picker
@@ -482,7 +476,7 @@ nodes:
           - { from: orgName, to: collected.dropdown_dept_name }
       search: { enabled: true, placeholder: "Search departments..." }
       empty_message: "No departments found under this state."
-    on_empty: notify_yp_lookup
+    on_empty: start_yp_lookup
     next: fetch_state_orgs
 
   # Fetch final organizations under the selected state department
@@ -524,7 +518,7 @@ nodes:
     type: branch
     rules:
       # Fallback to YP lookup if no organizations found (missing field, empty list, or only "Others" option)
-      - { if: "not has(ctx.collected.filtered_orgs) or len(ctx.collected.filtered_orgs) <= 1", then: notify_yp_lookup }
+      - { if: "not has(ctx.collected.filtered_orgs) or len(ctx.collected.filtered_orgs) <= 1", then: start_yp_lookup }
     default: org_picker
 
   - id: org_picker
@@ -548,13 +542,13 @@ nodes:
           - { from: orgName, to: collected.dropdown_org_name }
       search: { enabled: true, placeholder: "Search organizations..." }
       empty_message: "No organizations found under this selection."
-    on_empty: notify_yp_lookup
+    on_empty: start_yp_lookup
     next: branch_on_org_selection
 
   - id: branch_on_org_selection
     type: branch
     rules:
-      - { if: "ctx.collected.selected_org_id == 'other_org'", then: notify_yp_lookup }
+      - { if: "ctx.collected.selected_org_id == 'other_org'", then: start_yp_lookup }
     default: confirm_org_selection
 
   - id: confirm_org_selection
@@ -585,15 +579,6 @@ nodes:
       - "Select the organization name exactly as shown above"
     next: satisfied
 
-  # Notify user that organization is not in the system and we are fetching YP/SPOC details
-  - id: notify_yp_lookup
-    type: message
-    prompt:
-      text: |
-        **Finding Contact Details**
-
-        To assist you further, we are looking up the YP/SPOC contact details for your Ministry/State.
-    next: start_yp_lookup
 
   - id: start_yp_lookup
     type: branch
@@ -683,29 +668,8 @@ nodes:
     type: message
     prompt:
       text: |
-        **Need Further Assistance?**
-
-        To help get this resolved, we will raise a support ticket and our team will reach out to assist you shortly.
-    next: access_revoked_step1_ticket
-
-  - id: access_revoked_step1_ticket
-    type: ticket_confirm
-    prompt:
-      text: |
-        **Issue Identified:** Access Revoked — Support Request
-
-        **Summary of Request:**
-        You reported that you could not locate a YP or SPOC for your organization. You would like us to investigate and assist you with this access issue.
-        {% if ctx.collected.user_channel %}
-        • **Your Organisation:** {{ ctx.collected.user_channel }}
-        {% endif %}
-        {% if ctx.collected.transfer_dept_name %}
-        • **Target Organisation:** {{ ctx.collected.transfer_dept_name }}
-        {% endif %}
-
-        Please review the details above and confirm whether they are correct.
-    on_confirm: access_revoked_auto_ticket
-    on_cancel: satisfied
+        We could not find the SPOC details for your organization in our current records.
+    next: satisfied
 
   # ===========================================================================
   # 5. Escalation & Terminal
@@ -719,31 +683,11 @@ nodes:
         Please try again after some time. Thank you for your patience.
     next: satisfied
 
-  - id: access_revoked_auto_ticket
-    type: transfer_llm
-    auto_raise: silent
-    llm_context:
-      include_messages:  true
-      include_collected: true
-      include_flow_meta: true
-    llm_directives:
-      objective: |
-        The user's access has been revoked. 
-        Generate a support ticket.
-        Subject: "Access Revoked / Transfer Request Support"
-        Description: Include whether a transfer request was already pending (wf_transfer_id: {{ ctx.collected.wf_transfer_id }}), the target organization ({{ ctx.collected.transfer_dept_name }}), which path the user followed (e.g., pending request, no request, button disabled, org not found), and the user's current organization/channel ({{ ctx.collected.user_channel }}).
-      priority_override: P2
-    on_complete: confirm_ticket
-    on_restart: fetch_transfer_status
 
-  # Note: confirm_ticket (API call to Zoho) and ticket_confirmation are provided
-  # by the imported _zoho_ticket fragment. The local override has been removed
-  # so that tickets are actually created via the Zoho Desk API.
-    next: satisfied
 
   - id: satisfied
     type: end
     outcome: self_served
     prompt:
       text: |
-        Is there anything else I can help you with today?
+        Glad I could help.

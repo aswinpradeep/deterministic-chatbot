@@ -62,6 +62,7 @@ imports:
     with:
       node_id:       c1_pick_course
       prompt_text:   "Please select the course for which you have not received the certificate."
+      title:         "Select Course"
       field_name:    c1_course_id
       field_prefix:  "c1_"
       next:          c1_read_course_content
