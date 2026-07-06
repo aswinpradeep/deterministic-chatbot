@@ -5,7 +5,7 @@ YAML shape:
       type: end
       outcome: self_served
       prompt:
-        text: "Glad I could help! 🙏 Take care."
+        text: "I hope this helps. Please let me know if you need any further assistance."
 """
 
 from __future__ import annotations
