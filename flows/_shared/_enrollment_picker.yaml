@@ -43,6 +43,7 @@ nodes:
     type: collect
     prompt:
       text: "{{ params.prompt_text }}"
+      title: "{{ params.title | default('Select Course') }}"
     field:
       name: collected.{{ params.field_name }}
       type: select
