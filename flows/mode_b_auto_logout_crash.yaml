@@ -79,7 +79,7 @@ nodes:
     type: resolution
     prompt:
       text: |
-        Kindly follow the below steps and check if the issue is resolved:
+        Please follow the steps below and check if the issue is resolved:
     steps:
       - "Long press the application icon."
       - "Click on **App Info**."
@@ -88,7 +88,7 @@ nodes:
       - "Click on **Clear Data / Clear Storage**."
       - "Relaunch the application and try again."
     follow_up:
-      text: "Has the issue been resolved after following the above steps?"
+      text: "Has the issue been resolved after following these steps?"
       quick_replies:
         - { id: yes, label: "✅ Yes, issue is resolved" }
         - { id: no,  label: "❌ No, issue still persists" }
@@ -100,7 +100,7 @@ nodes:
     type: collect
     prompt:
       text: |
-        Kindly share the following details:
+        Could you share the following details?
     prompts:
       - { field: collected.device_name,     text: "📱 Device Name:",     optional: false }
       - { field: collected.device_model,    text: "📋 Device Model:",    optional: false }
@@ -134,7 +134,7 @@ nodes:
     type: resolution
     prompt:
       text: |
-        Upon checking, your device does not meet the minimum Android version required to support the application.
+        We checked, and your device doesn't meet the minimum Android version required to support the application.
 
         Please update your device to **Android 8 or above** and try again.
     steps:
@@ -165,7 +165,7 @@ nodes:
     type: message
     prompt:
       text: |
-        We understand that the issue persists even after clearing the application cache and data.
+        We understand the issue persists even after clearing the application cache and data.
 
         ✅ A support ticket has been raised and the details have been shared with the concerned team for further investigation.
     next: satisfied
@@ -177,7 +177,7 @@ nodes:
     type: collect
     prompt:
       text: |
-        Kindly share the following details:
+        Could you share the following details?
     prompts:
       - { field: collected.device_name,  text: "📱 Device Name:",                          optional: false }
       - { field: collected.device_model, text: "📋 Device Model:",                         optional: false }
@@ -211,9 +211,9 @@ nodes:
     type: resolution
     prompt:
       text: |
-        Upon checking, your device does not meet the minimum iOS version required to support the application.
+        We checked, and your device doesn't meet the minimum iOS version required to support the application.
 
-        The application supports **iOS 15.6 and above**. Kindly update your device and try again.
+        The application supports **iOS 15.6 and above** — please update your device and try again.
     steps:
       - "Go to your iPhone **Settings**."
       - "Tap **General** → **Software Update**."
@@ -242,7 +242,7 @@ nodes:
     type: message
     prompt:
       text: |
-        We understand that you are facing issues with the application.
+        We understand that you're facing issues with the application.
 
         ✅ A support ticket has been raised and the details have been shared with the concerned team for further investigation.
     next: satisfied

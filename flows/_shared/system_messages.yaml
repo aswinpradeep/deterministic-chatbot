@@ -8,9 +8,7 @@
 
 # Shown when a new session starts (before the topic menu)
 greeting: |
-  👋 Hi! I'm the **iGOT Karmayogi** support assistant.
-
-  What can I help you with today?
+  👋 Welcome to iGOT Karmayogi Support. How can I assist you today?
 
 # Shown after the user picks a category, before the sub-flow menu
 select_issue: "Please choose the specific issue you're facing:"

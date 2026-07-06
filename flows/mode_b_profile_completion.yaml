@@ -308,7 +308,7 @@ nodes:
         **{{ ctx.collected.designation_selected_name }}** is available in the iGOT master data but has **not been imported** by your MDO yet.
 
         {% if ctx.collected.mdo_admin_name or ctx.collected.mdo_admin_email %}
-        Kindly reach out to your MDO admin and request them to import the designation. Once imported through the MDO portal, it will be available for you to select.
+        Please reach out to your MDO admin and request them to import the designation. Once imported through the MDO portal, it will be available for you to select.
 
         {% if ctx.collected.mdo_admin_name %}
         • **MDO Name:** {{ ctx.collected.mdo_admin_name }}
@@ -320,8 +320,8 @@ nodes:
         Please send an email to **{{ ctx.collected.mdo_admin_email }}** requesting them to import the designation **{{ ctx.collected.designation_selected_name }}** into the MDO portal.
         {% endif %}
         {% else %}
-        As the MDO Admin for your organisation is currently not available in the system, we are unable to provide direct contact details.
-        Kindly contact the **Young Professional (YP)** assigned to your state/department/organisation for further clarification.
+        Since the MDO Admin for your organisation isn't currently available in the system, we're unable to provide direct contact details.
+        Please contact the **Young Professional (YP)** assigned to your state/department/organisation for further clarification.
         {% endif %}
     next: satisfied
 
@@ -505,8 +505,8 @@ nodes:
         {% endif %}
         • The **new Email ID / Mobile Number** you want updated
         {% else %}
-        As the MDO Admin for your organisation is currently not available in the system, we are unable to provide direct contact details.
-        Kindly contact the **Young Professional (YP)** assigned to your state/department/organisation for further clarification.
+        Since the MDO Admin for your organisation isn't currently available in the system, we're unable to provide direct contact details.
+        Please contact the **Young Professional (YP)** assigned to your state/department/organisation for further clarification.
         {% endif %}
     next: satisfied
 
@@ -729,8 +729,8 @@ nodes:
         {% endif %}
         • Your correct **EHRMS ID**
         {% else %}
-        As the MDO Admin for your organisation is currently not available in the system, we are unable to provide direct contact details.
-        Kindly contact the **Young Professional (YP)** assigned to your state/department/organisation for further clarification.
+        Since the MDO Admin for your organisation isn't currently available in the system, we're unable to provide direct contact details.
+        Please contact the **Young Professional (YP)** assigned to your state/department/organisation for further clarification.
         {% endif %}
     next: satisfied
 
@@ -845,8 +845,8 @@ nodes:
 
         Once both are updated, the Date of Retirement will automatically reflect on iGOT.
         {% else %}
-        As the MDO Admin for your organisation is currently not available in the system, we are unable to provide direct contact details.
-        Kindly contact the **Young Professional (YP)** assigned to your state/department/organisation for further clarification.
+        Since the MDO Admin for your organisation isn't currently available in the system, we're unable to provide direct contact details.
+        Please contact the **Young Professional (YP)** assigned to your state/department/organisation for further clarification.
         {% endif %}
     next: satisfied
 
@@ -1130,8 +1130,8 @@ nodes:
         {% endif %}
         Please connect with your MDO if you need help with the approval.
         {% else %}
-        As the MDO Admin for your organisation is currently not available in the system, we are unable to provide direct contact details.
-        Kindly contact the **Young Professional (YP)** assigned to your state/department/organisation for further clarification.
+        Since the MDO Admin for your organisation isn't currently available in the system, we're unable to provide direct contact details.
+        Please contact the **Young Professional (YP)** assigned to your state/department/organisation for further clarification.
         {% endif %}
     next: satisfied
 
@@ -1282,7 +1282,7 @@ nodes:
     type: message
     prompt:
       text: |
-        We have checked your profile and found that certain details are missing. Please update the following details in your profile to achieve 100% profile completion:
+        We've checked your profile and found that certain details are missing. Please update the following details to achieve 100% profile completion:
 
         {% if not ctx.collected.avatar_url %}
         • **Profile Photo**
@@ -1413,8 +1413,8 @@ nodes:
         • **MDO Email:** {{ ctx.collected.mdo_admin_email }}
         {% endif %}
         {% else %}
-        As the MDO Admin for your organisation is currently not available in the system, we are unable to provide direct contact details.
-        Kindly contact the **Young Professional (YP)** assigned to your state/department/organisation for further clarification.
+        Since the MDO Admin for your organisation isn't currently available in the system, we're unable to provide direct contact details.
+        Please contact the **Young Professional (YP)** assigned to your state/department/organisation for further clarification.
         {% endif %}
     next: satisfied
 

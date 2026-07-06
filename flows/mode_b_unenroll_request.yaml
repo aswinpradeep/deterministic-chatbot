@@ -44,7 +44,7 @@ nodes:
       text: |
         Currently, there is **no functionality available on iGOT Karmayogi to unenroll** from an enrolled course, program, or event.
 
-        This is a platform-level limitation
+        This is a platform-level limitation.
     steps:
       - "You may **continue and complete** the enrolled content at your own pace"
       - "Alternatively, you may **ignore the enrolled content** — it will remain in your profile but will not affect your other courses or progress"

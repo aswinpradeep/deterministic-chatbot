@@ -265,7 +265,7 @@ nodes:
     type: message
     prompt:
       text: |
-        We checked your activity data for the week **{{ ctx.collected.w2_label }}** .
+        We checked your activity data for the week **{{ ctx.collected.w2_label }}**.
 
         During that week, you spent **{{ ctx.collected.w2_mins | round(1) }} minutes** on the platform.
 
@@ -284,7 +284,7 @@ nodes:
     type: message
     prompt:
       text: |
-        We checked your activity data for the week **{{ ctx.collected.w3_label }}** .
+        We checked your activity data for the week **{{ ctx.collected.w3_label }}**.
 
         During that week, you spent **{{ ctx.collected.w3_mins | round(1) }} minutes** on the platform.
 
@@ -303,7 +303,7 @@ nodes:
     type: message
     prompt:
       text: |
-        We checked your activity data for the week **{{ ctx.collected.w4_label }}** .
+        We checked your activity data for the week **{{ ctx.collected.w4_label }}**.
 
         During that week, you spent **{{ ctx.collected.w4_mins | round(1) }} minutes** on the platform.
 
@@ -322,7 +322,7 @@ nodes:
     type: message
     prompt:
       text: |
-        We checked your activity data for the week **{{ ctx.collected.w5_label }}** .
+        We checked your activity data for the week **{{ ctx.collected.w5_label }}**.
 
         During that week, you spent **{{ ctx.collected.w5_mins | round(1) }} minutes** on the platform.
 
@@ -341,7 +341,7 @@ nodes:
     type: message
     prompt:
       text: |
-        We checked your activity data for the week **{{ ctx.collected.w6_label }}** .
+        We checked your activity data for the week **{{ ctx.collected.w6_label }}**.
 
         During that week, you spent **{{ ctx.collected.w6_mins | round(1) }} minutes** on the platform.
 
@@ -360,7 +360,7 @@ nodes:
     type: message
     prompt:
       text: |
-        We checked your activity data for the week **{{ ctx.collected.w7_label }}** .
+        We checked your activity data for the week **{{ ctx.collected.w7_label }}**.
 
         During that week, you spent **{{ ctx.collected.w7_mins | round(1) }} minutes** on the platform.
 
@@ -379,7 +379,7 @@ nodes:
     type: message
     prompt:
       text: |
-        We checked your activity data for the week **{{ ctx.collected.w8_label }}** .
+        We checked your activity data for the week **{{ ctx.collected.w8_label }}**.
 
         During that week, you spent **{{ ctx.collected.w8_mins | round(1) }} minutes** on the platform.
 
@@ -398,7 +398,7 @@ nodes:
     type: message
     prompt:
       text: |
-        We checked your activity data for the week **{{ ctx.collected.w9_label }}** .
+        We checked your activity data for the week **{{ ctx.collected.w9_label }}**.
 
         During that week, you spent **{{ ctx.collected.w9_mins | round(1) }} minutes** on the platform.
 
@@ -417,7 +417,7 @@ nodes:
     type: message
     prompt:
       text: |
-        We checked your activity data for the week **{{ ctx.collected.w10_label }}** .
+        We checked your activity data for the week **{{ ctx.collected.w10_label }}**.
 
         During that week, you spent **{{ ctx.collected.w10_mins | round(1) }} minutes** on the platform.
 
@@ -436,7 +436,7 @@ nodes:
     type: message
     prompt:
       text: |
-        We checked your activity data for the week **{{ ctx.collected.w11_label }}** .
+        We checked your activity data for the week **{{ ctx.collected.w11_label }}**.
 
         During that week, you spent **{{ ctx.collected.w11_mins | round(1) }} minutes** on the platform.
 
@@ -586,7 +586,7 @@ nodes:
     type: message
     prompt:
       text: |
-        We could not find any weekly activity data for your account on iGOT Karmayogi.
+        We couldn't find any weekly activity data for your account on iGOT Karmayogi.
 
         This typically happens when:
         - You have not completed any learning activity yet, **or**

@@ -64,7 +64,7 @@ imports:
   - fragment: _enrollment_picker
     with:
       node_id:       pick_cap_for_limit
-      prompt_text:   "Kindly search and select the relevant Course / Program / Event for which you are facing the progress update or certificate generation issue."
+      prompt_text:   "Please search and select the relevant Course / Program / Event you're facing the progress update or certificate generation issue with."
       field_name:    course_id
       field_prefix:  ""
       next:          branch_on_cap_limit_certificate
@@ -155,9 +155,9 @@ nodes:
     type: message
     prompt:
       text: |
-        Once the profile is successfully verified, please check the Comprehensive Assessment Program (CAP) again.
+        Once your profile is successfully verified, please check the Comprehensive Assessment Program (CAP) again.
 
-        Please feel free to reach out if you require any further assistance.
+        Please feel free to reach out if you need any further assistance.
     next: satisfied
 
   - id: branch_on_service_details
@@ -175,7 +175,7 @@ nodes:
     type: message
     prompt:
       text: |
-        Upon checking, we found the following details in your profile:
+        We checked, and found the following details in your profile:
 
         - **Organization:** {{ ctx.collected.org_name or ctx.collected.org_channel }}
         - **Designation:** {{ ctx.collected.user_designation }}
@@ -184,7 +184,7 @@ nodes:
         - **Service:** {{ ctx.collected.service_details }}
         - **Batch:** {{ ctx.collected.batch_details }}
 
-        Kindly confirm whether the above details are correct.
+        Could you confirm whether these details are correct?
     quick_replies:
       - { id: yes, label: "✅ Yes, details are correct" }
       - { id: no,  label: "❌ No, details are incorrect" }
@@ -242,13 +242,13 @@ nodes:
     type: message
     prompt:
       text: |
-        Upon checking, we found the following Comprehensive Assessment Program (CAP) assignments for your profile:
+        We checked, and found the following Comprehensive Assessment Program (CAP) assignments for your profile:
         
         {% for cap in ctx.collected.all_caps %}
         - **{{ cap.name | default('Not Available') }}**
         {% endfor %}
         
-        Kindly confirm whether the CAP you were expecting is in this list.
+        Could you confirm whether the CAP you were expecting is in this list?
     quick_replies:
       - { id: yes, label: "✅ Yes" }
       - { id: no,  label: "❌ No" }
@@ -261,7 +261,7 @@ nodes:
     type: message
     prompt:
       text: |
-        Upon checking, we found that no Comprehensive Assessment Program (CAP) is currently assigned to your profile. 
+        We checked, and found that no Comprehensive Assessment Program (CAP) is currently assigned to your profile.
 
         CAP creation and assignment are managed by the concerned department.
     next: lookup_mdo_admin
@@ -270,11 +270,11 @@ nodes:
     type: message
     prompt:
       text: |
-        Upon checking, we found that the following Comprehensive Assessment Program (CAP) is assigned to your profile.
+        We checked, and found that the following Comprehensive Assessment Program (CAP) is assigned to your profile.
 
         Since the due date has already passed, it may no longer be visible on your dashboard.
 
-        Kindly search for the CAP using the search bar on the iGOT Karmayogi portal and continue the assessment.
+        Please search for the CAP using the search bar on the iGOT Karmayogi portal and continue the assessment.
 
         {% for cap in ctx.collected.all_caps | default([]) %}
         {% if not ctx.collected.selected_cap_id or cap.identifier == ctx.collected.selected_cap_id %}
@@ -290,11 +290,11 @@ nodes:
     type: message
     prompt:
       text: |
-        Upon checking, we found the following Comprehensive Assessment Program (CAP) assignment for your profile:
-        
+        We checked, and found the following Comprehensive Assessment Program (CAP) assignment for your profile:
+
         - **CAP Name:** {{ ctx.collected.all_caps[0].name | default('Not Available') }}
-        
-        Kindly confirm whether the CAP you were expecting is in this list.
+
+        Could you confirm whether the CAP you were expecting is in this list?
     quick_replies:
       - { id: yes, label: "✅ Yes" }
       - { id: no,  label: "❌ No" }
@@ -373,13 +373,13 @@ nodes:
     type: message
     prompt:
       text: |
-        Upon checking, we found the following Comprehensive Assessment Program (CAP) assignments for your profile:
+        We checked, and found the following Comprehensive Assessment Program (CAP) assignments for your profile:
         
         {% for cap in ctx.collected.all_caps %}
         - **{{ cap.name | default('Not Available') }}**
         {% endfor %}
         
-        Kindly confirm whether the CAP you were expecting is in this list.
+        Could you confirm whether the CAP you were expecting is in this list?
     quick_replies:
       - { id: yes, label: "✅ Yes" }
       - { id: no,  label: "❌ No" }
@@ -392,11 +392,11 @@ nodes:
     type: message
     prompt:
       text: |
-        Upon checking, we found that the following Comprehensive Assessment Program (CAP) is assigned to your profile:
+        We checked, and found that the following Comprehensive Assessment Program (CAP) is assigned to your profile:
 
         **CAP Name:** {{ ctx.collected.all_caps[0].name | default('Not Available') }}
 
-        Kindly confirm whether this is the CAP you were expecting.
+        Could you confirm whether this is the CAP you were expecting?
     quick_replies:
       - { id: yes, label: "✅ Yes" }
       - { id: no,  label: "❌ No" }
@@ -437,7 +437,7 @@ nodes:
         {% endif %}
         {% endfor %}
 
-        Kindly use the button below to access your Comprehensive Assessment Program.
+        Please use the button below to access your Comprehensive Assessment Program.
     action_button:
       label: "🔗 Click here to open the CAP"
       url: "{{ env.KARMAYOGI_PORTAL_BASE_URL }}/app/toc/{{ ctx.collected.selected_cap_id or (ctx.collected.all_caps[0].identifier if ctx.collected.all_caps else '') }}/overview"
@@ -447,7 +447,7 @@ nodes:
     type: message
     prompt:
       text: |
-        Kindly let us know which of the following details are incorrect:
+        Could you let us know which of the following details are incorrect:
     quick_replies:
       - { id: org, label: "🏢 Organization" }
       - { id: desig, label: "📋 Designation" }
@@ -470,7 +470,7 @@ nodes:
     type: message
     prompt:
       text: |
-        Kindly confirm whether you belong to any of the following All India Services:
+        Could you confirm whether you belong to any of the following All India Services:
         - IAS
         - IPS
         - IFS
@@ -493,22 +493,22 @@ nodes:
         {% endif %}{% if not ctx.collected.batch_details %}- Batch Information
         {% endif %}{% if not ctx.collected.central_deputation %}- Central Deputation Details{% endif %}
 
-        Kindly update the required details in your profile. Once the profile has been updated successfully, please wait for approximately **4 hours** and then check whether the Comprehensive Assessment Program (CAP) is visible.
+        Please update the required details in your profile. Once updated, please wait approximately **4 hours** and then check whether the Comprehensive Assessment Program (CAP) is visible.
 
-        Please feel free to reach out if you require any further assistance.
+        Please feel free to reach out if you need any further assistance.
     next: satisfied
 
   - id: show_limited_details
     type: message
     prompt:
       text: |
-        Upon checking, we found the following details in your profile:
+        We checked, and found the following details in your profile:
 
         - **Organization:** {{ ctx.collected.org_name or ctx.collected.org_channel }}
         - **Designation:** {{ ctx.collected.user_designation }}
         - **Group:** {{ ctx.collected.user_group }}
 
-        Kindly confirm whether the above details are correct.
+        Could you confirm whether these details are correct?
     quick_replies:
       - { id: yes, label: "✅ Yes, details are correct" }
       - { id: no,  label: "❌ No, details are incorrect" }
@@ -521,7 +521,7 @@ nodes:
     type: message
     prompt:
       text: |
-        Kindly let us know which of the following details are incorrect:
+        Could you let us know which of the following details are incorrect:
     quick_replies:
       - { id: org, label: "🏢 Organization" }
       - { id: desig, label: "📋 Designation" }
@@ -579,9 +579,9 @@ nodes:
     type: message
     prompt:
       text: |
-        Once you have updated the required details, please check if the Comprehensive Assessment Program (CAP) is visible again after the profile changes are reflected.
+        Once you've updated the required details, please check if the Comprehensive Assessment Program (CAP) is visible again after the profile changes are reflected.
 
-        Please feel free to reach out if you require any further assistance.
+        Please feel free to reach out if you need any further assistance.
     next: satisfied
 
 
@@ -590,7 +590,7 @@ nodes:
     type: message
     prompt:
       text: |
-        I encountered a technical issue while checking your profile. 
+        I ran into a technical issue while checking your profile.
         Please try again later or contact support.
     next: satisfied
 
@@ -605,8 +605,8 @@ nodes:
     type: message
     prompt:
       text: |
-        Kindly connect with the below contact for further assistance regarding CAP creation and assignment:
-        
+        Please connect with the contact below for further assistance regarding CAP creation and assignment:
+
         Name: **{{ ctx.collected.mdo_admin_name }}**
         Email ID: **{{ ctx.collected.mdo_admin_email }}**
     next: satisfied
@@ -614,15 +614,15 @@ nodes:
   - id: mdo_api_error
     type: message
     prompt:
-      text: "MDO Admin details could not be retrieved. Let me check for the YP/AM contact for your organization."
+      text: "We couldn't retrieve the MDO Admin details. Let me check for the YP/AM contact for your organization."
     next: lookup_yp_contact
 
   - id: yp_found_result
     type: message
     prompt:
       text: |
-        Kindly connect with the below contact for further assistance regarding CAP creation and assignment:
-        
+        Please connect with the contact below for further assistance regarding CAP creation and assignment:
+
         Name: **{{ ctx.collected.yp_name }}**
         Email ID: **{{ ctx.collected.yp_email }}**
     next: satisfied
@@ -631,8 +631,8 @@ nodes:
     type: message
     prompt:
       text: |
-        We were unable to retrieve the MDO Admin or YP/AM contact details for your organization at this time.
-        Kindly reach out to your concerned authority for further assistance.
+        We couldn't retrieve the MDO Admin or YP/AM contact details for your organization at this time.
+        Please reach out to your concerned authority for further assistance.
     next: satisfied
 
   # ===========================================================================
@@ -703,9 +703,9 @@ nodes:
     type: message
     prompt:
       text: |
-        Upon checking, we found that the assigned Comprehensive Assessment Program (CAP) is not yet enrolled.
+        We checked, and found that the assigned Comprehensive Assessment Program (CAP) is not yet enrolled.
 
-        Kindly enroll in the assigned CAP to unlock the Final Assessment.
+        Please enroll in the assigned CAP to unlock the Final Assessment.
     action_button:
       label: "🔗 Click here to open the CAP"
       url: "{{ env.KARMAYOGI_PORTAL_BASE_URL }}/app/toc/{{ ctx.collected.selected_cap_id or (ctx.collected.all_caps[0].identifier if ctx.collected.all_caps else '') }}/overview"
@@ -785,9 +785,9 @@ nodes:
     type: message
     prompt:
       text: |
-        Upon checking, we found that all prerequisite courses have been completed successfully.
+        We checked, and found that all prerequisite courses have been completed successfully.
 
-        Since the Final Assessment is still locked, kindly select the type of issue you are facing below so we can assist you further:
+        Since the Final Assessment is still locked, please select the type of issue you're facing below so we can assist you further:
     quick_replies:
       - { id: mobile, label: "📱 Unable to access from Mobile" }
       - { id: other,  label: "Any Other Error" }
@@ -856,7 +856,7 @@ nodes:
     type: message
     prompt:
       text: |
-        Kindly try accessing the Final Assessment through the web portal by following the below steps:
+        Please try accessing the Final Assessment through the web portal by following the steps below:
 
         1. Open **Google Chrome**.
         2. Search for **iGOT Karmayogi**.
@@ -1099,7 +1099,7 @@ nodes:
 
         {{ ctx.collected.incomplete_resource_names }}
 
-        Kindly revisit the course and complete the above resources to update your progress.
+        Please revisit the course and complete the resources above to update your progress.
     steps:
       - "Go to **Profile** → **My Learning** → **In Progress**"
       - "Locate **{{ ctx.collected.course_name }}** and click **Resume**"
@@ -1125,7 +1125,7 @@ nodes:
         We found that all learning resources for **{{ ctx.collected.course_name }}** have been completed successfully.
         However, the assessment is still pending.
 
-        Kindly complete the assessment to achieve 100% completion.
+        Please complete the assessment to achieve 100% completion.
 
         If you are unable to complete the assessment, please choose one of the options below:
     quick_replies:
@@ -1168,9 +1168,9 @@ nodes:
     type: resolution
     prompt:
       text: |
-        Upon verification, you still have **{{ (ctx.collected.assessment_max_attempts or 3) - len(ctx.collected.assessment_attempts_list or []) }} attempt(s)** remaining for the assessment.
+        We've verified that you still have **{{ (ctx.collected.assessment_max_attempts or 3) - len(ctx.collected.assessment_attempts_list or []) }} attempt(s)** remaining for the assessment.
 
-        Kindly retry the assessment to complete the course.
+        Please retry the assessment to complete the course.
     steps:
       - "Go to **Profile** → **My Learning** → **In Progress**"
       - "Open **{{ ctx.collected.course_name }}** and click **Resume**"
@@ -1270,9 +1270,9 @@ nodes:
     type: resolution
     prompt:
       text: |
-        Upon verification, you still have **{{ (ctx.collected.assessment_attempts_allowed | default(0)) - (ctx.collected.assessment_attempts_made | default(0)) }} attempt(s)** remaining for the assessment.
+        We've verified that you still have **{{ (ctx.collected.assessment_attempts_allowed | default(0)) - (ctx.collected.assessment_attempts_made | default(0)) }} attempt(s)** remaining for the assessment.
 
-        Kindly retry the assessment to complete the course.
+        Please retry the assessment to complete the course.
     steps:
       - "Go to **Profile** → **My Learning** → **In Progress**"
       - "Open **{{ ctx.collected.course_name }}** and click **Resume**"

@@ -76,7 +76,7 @@ nodes:
   - id: pick_event_from_list_uc1
     type: collect
     prompt:
-      text: "Kindly search and select the relevant event from your enrolled events list for which you are unable to view the video."
+      text: "Please search and select the event from your enrolled events list that you're unable to view the video for."
       title: "Select Event"
     field:
       name: collected.event_id
@@ -102,7 +102,7 @@ nodes:
   - id: pick_event_from_list_uc2
     type: collect
     prompt:
-      text: "Kindly search and select the relevant event from your enrolled events list for which the video is not playing."
+      text: "Please search and select the event from your enrolled events list where the video isn't playing."
       title: "Select Event"
     field:
       name: collected.event_id
@@ -128,7 +128,7 @@ nodes:
   - id: pick_event_from_list_uc3
     type: collect
     prompt:
-      text: "Kindly search and select the relevant event from your enrolled events list for which the progress is not updating."
+      text: "Please search and select the event from your enrolled events list where the progress isn't updating."
       title: "Select Event"
     field:
       name: collected.event_id
@@ -155,7 +155,7 @@ nodes:
   - id: pick_event_from_list_uc4
     type: collect
     prompt:
-      text: "Kindly search and select the relevant event from your enrolled events list for which you are unable to download the certificate."
+      text: "Please search and select the event from your enrolled events list that you're unable to download the certificate for."
       title: "Select Event"
     field:
       name: collected.event_id
@@ -239,7 +239,7 @@ nodes:
     type: message
     prompt:
       text: |
-        We found that the selected event contains a valid video. Kindly access the event and complete it.
+        We found that the selected event contains a valid video. Please access the event and complete it.
     next: satisfied
 
   # ===========================================================================
@@ -316,7 +316,7 @@ nodes:
     type: resolution
     prompt:
       text: |
-        We verified the event configuration and found that the video setup is correct. Kindly try accessing the event using the steps below.
+        We verified the event configuration and found that the video setup is correct. Please try accessing the event using the steps below.
     steps:
       - "If Using Mobile Device:"
       - "1. Log in to the iGOT Karmayogi portal."
@@ -386,7 +386,7 @@ nodes:
     type: message
     prompt:
       text: |
-        We found that the selected event is still in progress. Kindly complete the event to successfully complete the learning and become eligible for certificate generation.
+        We found that the selected event is still in progress. Please complete the event to finish the learning and become eligible for certificate generation.
     next: satisfied
 
   - id: confirm_ticket_uc3
@@ -435,14 +435,14 @@ nodes:
     type: message
     prompt:
       text: |
-        We found that the selected event is still in progress. Kindly complete the event to become eligible for certificate generation.
+        We found that the selected event is still in progress. Please complete the event to become eligible for certificate generation.
     next: satisfied
 
   - id: resolution_uc4_case_b
     type: message
     prompt:
       text: |
-        We found that the event completion criteria have been met. Kindly follow the steps below to access and download your certificate.
+        We found that the event completion criteria have been met. Please follow the steps below to access and download your certificate.
 
         **Steps to Download the Certificate:**
         - Log in to the iGOT Karmayogi portal.
@@ -501,6 +501,6 @@ nodes:
   - id: resolution_generic_error
     type: message
     prompt:
-      text: "We encountered a temporary technical error while fetching the details. Please try again after some time."
+      text: "We ran into a temporary technical error while fetching the details. Please try again after some time."
     next: satisfied
 

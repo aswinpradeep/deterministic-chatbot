@@ -189,7 +189,7 @@ async def start_session(
         activities = [
             Activity.markdown(
                 _sys(request, "greeting",
-                     "👋 Hi! I'm the **iGOT Karmayogi** support assistant.\n\nWhat can I help you with today?")
+                     "👋 Welcome to iGOT Karmayogi Support. How can I assist you today?")
             ).model_dump(exclude_none=True),
             Activity.quick_replies(
                 choices=_category_quick_replies(request)
@@ -781,7 +781,7 @@ async def _history_initial_or_empty(
     initial_activities = [
         Activity.markdown(
             _sys(request, "greeting",
-                 "👋 Hi! I'm the **iGOT Karmayogi** support assistant.\n\nWhat can I help you with today?")
+                 "👋 Welcome to iGOT Karmayogi Support. How can I assist you today?")
         ).model_dump(exclude_none=True),
         Activity.quick_replies(
             choices=_category_quick_replies(request)

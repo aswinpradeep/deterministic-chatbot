@@ -82,7 +82,7 @@ nodes:
     type: message
     prompt:
       text: |
-        Kindly confirm whether you are looking for a marketplace/external course such as Coursera or Harvard.
+        Could you confirm whether you're looking for a marketplace or external course, such as one offered through Coursera or Harvard?
     quick_replies:
       - { id: yes, label: "Yes" }
       - { id: no,  label: "No" }
@@ -100,11 +100,11 @@ nodes:
     type: resolution
     prompt:
       text: |
-        Thank you for confirming that you are looking for a marketplace/external course provided by platforms such as Coursera or Harvard.
+        Thanks for confirming that you're looking for a marketplace or external course, such as those offered through Coursera or Harvard.
 
-        Currently, there is no active enrollment cycle for marketplace/external courses this year.
+        At the moment, there's no active enrollment cycle for marketplace/external courses this year.
 
-        Thank you for showing interest in learning through the platform. We request you to kindly wait until the next enrollment cycle is announced. You will be notified once the enrollment process starts.
+        We appreciate your interest in learning through the platform. Please wait until the next enrollment cycle is announced — you'll be notified as soon as it opens.
     steps: []
     follow_up:
       text: "Is there anything else I can help you with?"
@@ -120,7 +120,7 @@ nodes:
     type: message
     prompt:
       text: |
-        Kindly confirm whether you are looking for:
+        Could you let me know what you're looking for?
     quick_replies:
       - { id: course, label: "📘 A Course / Program" }
       - { id: event,  label: "📅 An Event" }
@@ -143,7 +143,7 @@ nodes:
     type: message
     prompt:
       text: |
-        Kindly share the exact course or program name you are searching for.
+        Could you share the exact name of the course or program you're looking for?
     next: ask_course_name
 
   - id: escalate_api_error
@@ -152,7 +152,7 @@ nodes:
       text: |
         **Profile Details Unavailable**
 
-        We were unable to fetch your profile details at this moment. Please try again shortly.
+        We're unable to fetch your profile details right now. Please try again in a little while.
     quick_replies:
       - { id: retry, label: "🔄 Try again" }
       - { id: done,  label: "✅ Exit" }
@@ -290,11 +290,11 @@ nodes:
     type: resolution
     prompt:
       text: |
-        Upon checking, we found that you are eligible for the requested moderated course.
+        Good news — you're eligible for this moderated course.
 
         📘 **Course Name:** {{ ctx.collected.course_name_found }}
 
-        Kindly use the link below to access and enroll in the course.
+        Please use the link below to access it and complete your enrollment.
     steps: []
     action_button:
       label: "🔗 Open Course"
@@ -354,11 +354,11 @@ nodes:
     type: resolution
     prompt:
       text: |
-        Upon checking, we found the requested course on the platform.
+        We found the course you were looking for on the platform.
 
         📘 **Course Name:** {{ ctx.collected.course_name_found }}
 
-        Kindly use the link below to navigate to the course and proceed with enrollment.
+        Please use the link below to go to the course and proceed with enrollment.
     steps: []
     action_button:
       label: "🔗 Open Course"
@@ -406,13 +406,13 @@ nodes:
     type: resolution
     prompt:
       text: |
-        We found multiple courses matching your search criteria on the platform.
+        We found multiple courses matching your search on the platform.
 
-        Kindly refer to the eligible course below and proceed with enrollment:
+        Here's the eligible course we'd recommend — please proceed with enrollment:
 
         📘 **Course Name:** {{ ctx.collected.course_name_found }}
 
-        If this is not the course you are looking for, please search again with a more specific name.
+        If this isn't the course you were looking for, please search again using a more specific name.
     steps: []
     action_button:
       label: "🔗 Open Course"
@@ -433,7 +433,7 @@ nodes:
     type: resolution
     prompt:
       text: |
-        Upon checking, we found that the requested course **{{ ctx.collected.course_name_found }}** has already been retired and is no longer available for enrollment on the platform.
+        We checked, and the course **{{ ctx.collected.course_name_found }}** has been retired and is no longer available for enrollment on the platform.
     steps: []
     follow_up:
       text: "Is there anything else I can help you with?"
@@ -451,9 +451,9 @@ nodes:
     type: resolution
     prompt:
       text: |
-        Upon checking, we found that the requested course **{{ ctx.collected.course_name_found }}** is currently under review.
+        We checked, and the course **{{ ctx.collected.course_name_found }}** is currently under review.
 
-        Hence, the course is temporarily unavailable for enrollment at this moment.
+        As a result, it's temporarily unavailable for enrollment.
     steps: []
     follow_up:
       text: "Is there anything else I can help you with?"
@@ -471,12 +471,12 @@ nodes:
     type: resolution
     prompt:
       text: |
-        We are unable to find the shared course name **"{{ ctx.collected.search_term }}"** in the system/database.
+        We couldn't find a course matching **"{{ ctx.collected.search_term }}"** in our records.
 
-        We request you to kindly share the exact course name so that we can further check and assist you accordingly.
+        Could you share the exact course name so we can look into this further and assist you?
     steps: []
     follow_up:
-      text: "Please share the exact course name to search again."
+      text: "Please share the exact course name so we can search again."
       quick_replies:
         - { id: retry, label: "🔍 Try a different name" }
         - { id: done,  label: "✅ Exit" }
@@ -503,11 +503,11 @@ nodes:
     type: resolution
     prompt:
       text: |
-        Upon checking, we found that the course access criteria does not match your current profile attributes.
+        We checked, and it looks like the course access criteria don't match your current profile.
 
-        We request you to connect with the concerned MDO/YP for further assistance regarding course eligibility and access.
+        Please reach out to your MDO/YP for further assistance with course eligibility and access.
 
-        Please find the contact details below:
+        Here are their contact details:
 
         👤 **Name:** {{ ctx.collected.mdo_admin_name }}
         📧 **Email ID:** {{ ctx.collected.mdo_admin_email }}
@@ -535,11 +535,11 @@ nodes:
     type: resolution
     prompt:
       text: |
-        Upon checking, we found that the course access criteria does not match your current profile attributes.
+        We checked, and it looks like the course access criteria don't match your current profile.
 
-        We request you to connect with the concerned YP/AM for further assistance regarding course eligibility and access.
+        Please reach out to your YP/AM for further assistance with course eligibility and access.
 
-        Please find the contact details below:
+        Here are their contact details:
 
         👤 **Name:** {{ ctx.collected.yp_name }}
         📧 **Email ID:** {{ ctx.collected.yp_email }}
@@ -557,9 +557,9 @@ nodes:
     type: resolution
     prompt:
       text: |
-        Upon checking, we found that the course access criteria does not match your current profile attributes.
+        We checked, and it looks like the course access criteria don't match your current profile.
 
-        We request you to connect with the concerned MDO or YP for further assistance regarding course eligibility and access.
+        Please reach out to your concerned MDO or YP for further assistance with course eligibility and access.
     steps: []
     follow_up:
       text: "Is there anything else I can help you with?"
@@ -575,7 +575,7 @@ nodes:
       text: |
         **Search Unavailable**
 
-        Search is unavailable right now. Please try again.
+        Search isn't available right now. Please try again in a moment.
     quick_replies:
       - { id: retry, label: "🔄 Try again" }
       - { id: done,  label: "✅ Exit" }
@@ -592,7 +592,7 @@ nodes:
     type: collect
     prompt:
       text: |
-        Kindly share the exact event name that you are searching for.
+        Could you share the exact name of the event you're looking for?
     field:
       name:        collected.event_name
       type:        text
@@ -677,11 +677,11 @@ nodes:
     type: resolution
     prompt:
       text: |
-        Upon checking, we found the requested event on the platform.
+        We found the event you were looking for on the platform.
 
         📅 **Event Name:** {{ ctx.collected.event_name_found }}
 
-        Kindly use the link below to access the event and proceed accordingly.
+        Please use the link below to access the event and proceed accordingly.
     steps: []
     action_button:
       label: "🔗 Open Event"
@@ -700,7 +700,7 @@ nodes:
     type: resolution
     prompt:
       text: |
-        The event **{{ ctx.collected.event_name_found }}** has been retired from the platform and is no longer available.
+        The event **{{ ctx.collected.event_name_found }}** has been retired and is no longer available on the platform.
     steps: []
     follow_up:
       text: "Is there anything else I can help you with?"
@@ -716,9 +716,9 @@ nodes:
     type: resolution
     prompt:
       text: |
-        The event **{{ ctx.collected.event_name_found }}** was found but is currently not available (Status: {{ ctx.collected.event_status or "Under Review" }}).
+        We found the event **{{ ctx.collected.event_name_found }}**, but it's currently not available (Status: {{ ctx.collected.event_status or "Under Review" }}).
 
-        It may be upcoming or under modification — please check back later.
+        It may be upcoming or being updated — please check back later.
     steps: []
     follow_up:
       text: "Is there anything else I can help you with?"
@@ -734,12 +734,12 @@ nodes:
     type: resolution
     prompt:
       text: |
-        We are unable to find the shared event name **"{{ ctx.collected.event_name }}"** in the system/database.
+        We couldn't find an event matching **"{{ ctx.collected.event_name }}"** in our records.
 
-        We request you to kindly share the exact event name so that we can further check and assist you accordingly.
+        Could you share the exact event name so we can look into this further and assist you?
     steps: []
     follow_up:
-      text: "Please share the exact event name to search again."
+      text: "Please share the exact event name so we can search again."
       quick_replies:
         - { id: retry, label: "🔍 Try a different name" }
         - { id: done,  label: "✅ Exit" }
@@ -753,7 +753,7 @@ nodes:
       text: |
         **Search Unavailable**
 
-        We are having trouble searching for events right now. Please try again.
+        We're having trouble searching for events right now. Please try again in a moment.
     quick_replies:
       - { id: retry, label: "🔄 Try again" }
       - { id: done,  label: "✅ Exit" }
