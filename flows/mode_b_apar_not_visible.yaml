@@ -105,8 +105,8 @@ nodes:
     type: message
     prompt:
       text: |
-        I'm sorry, I was unable to find your profile details in the system.
-        For security reasons, I can't proceed further at this time. Please try again after some time.
+        I'm sorry, but I couldn't find your profile details in the system.
+        For security reasons, I'm unable to proceed further at this time. Please try again after a while.
     next: satisfied
 
   # ===========================================================================
@@ -177,7 +177,7 @@ nodes:
     type: message
     prompt:
       text: |
-        Upon checking, we found that the training plan has been assigned to your profile.
+        We checked, and a training plan has been assigned to your profile.
 
         To view the training plan courses, please follow the steps below:
 
@@ -209,7 +209,7 @@ nodes:
     type: message
     prompt:
       text: |
-        Kindly confirm whether you would like to view the list of:
+        Could you confirm which list you'd like to view:
 
         - APAR training plan courses, or
         - Non-APAR training plan courses.
@@ -253,7 +253,7 @@ nodes:
     type: message
     prompt:
       text: |
-        Here is the link to access the selected course:
+        Here's the link to access the selected course:
     action_button:
       label: "🔗 Click here to open the course"
       url: "{{ env.KARMAYOGI_PORTAL_BASE_URL }}/app/toc/{{ ctx.collected.selected_apar_course_id }}/overview"
@@ -291,7 +291,7 @@ nodes:
     type: message
     prompt:
       text: |
-        Here is the link to access the selected course:
+        Here's the link to access the selected course:
     action_button:
       label: "🔗 Click here to open the course"
       url: "{{ env.KARMAYOGI_PORTAL_BASE_URL }}/app/toc/{{ ctx.collected.selected_non_apar_course_id }}/overview"
@@ -354,13 +354,13 @@ nodes:
     type: message
     prompt:
       text: |
-        Upon checking, we found that your profile is currently mapped to **{{ ctx.collected.org_name or "iGOT / Karmayogi Prarambh Trainee" }}**.
+        We checked, and your profile is currently mapped to **{{ ctx.collected.org_name or "iGOT / Karmayogi Prarambh Trainee" }}**.
 
-        APAR courses and training plans are assigned only after a user is mapped to their respective department/organization. As your profile is currently not mapped to the correct department/organization, no APAR courses or training plans can be assigned at this stage.
+        APAR courses and training plans are assigned only after a user is mapped to their respective department/organization. Since your profile isn't mapped to the correct department/organization yet, no APAR courses or training plans can be assigned at this stage.
 
-        Kindly raise a **Transfer Request** to move your profile to the correct department/organization. Once the transfer request is approved and your profile is mapped to the appropriate organization, the concerned authority will be able to assign the relevant training plans and courses.
+        You'll need to raise a **Transfer Request** to move your profile to the correct department/organization. Once the transfer request is approved and your profile is mapped to the appropriate organization, the concerned authority will be able to assign the relevant training plans and courses.
 
-        We will assist you with the Transfer Request process.
+        We'll help you through the Transfer Request process.
     next: guide_transfer_request_apar
 
   # ===========================================================================
@@ -392,11 +392,11 @@ nodes:
     type: message
     prompt:
       text: |
-        Upon checking, we found that your profile is currently **not verified** on iGOT Karmayogi.
+        We checked, and your profile is currently **not verified** on iGOT Karmayogi.
 
         APAR training plans are assigned only after your profile is verified.
 
-        Let me check a few more details to assist you further.
+        Let me check a few more details to help you further.
     next: ask_all_india_services_unverified
 
   # SOP Step 7.1 — Ask All India Services eligibility (not-verified path)
@@ -404,7 +404,7 @@ nodes:
     type: message
     prompt:
       text: |
-        Kindly confirm whether you belong to any of the All India Services, such as:
+        Could you confirm whether you belong to any of the All India Services, such as:
 
         - IAS
         - IPS
@@ -422,7 +422,7 @@ nodes:
     type: resolution
     prompt:
       text: |
-        As your profile is currently not verified, we request you to complete the profile verification process.
+        Since your profile isn't verified yet, you'll need to complete the profile verification process.
 
         Please follow the steps below:
     steps:
@@ -440,9 +440,9 @@ nodes:
     type: message
     prompt:
       text: |
-        Once the profile is successfully verified, the training plans / APAR courses may reflect in your account.
+        Once your profile is successfully verified, the training plans / APAR courses should reflect in your account.
 
-        Kindly recheck the APAR section after the profile verification is completed.
+        Please recheck the APAR section after the profile verification is complete.
     disable_input: true
     next: satisfied
 
@@ -453,13 +453,13 @@ nodes:
     type: message
     prompt:
       text: |
-        As checked, your profile is currently verified with the following details:
+        We checked, and your profile is currently verified with the following details:
 
         - **Organization:** {{ ctx.collected.org_name or ctx.collected.org_channel  }}
         - **Designation:** {{ ctx.collected.user_designation }}
         - **Group:** {{ ctx.collected.user_group  }}
 
-        Kindly confirm whether the above details are correct and whether you currently belong to the same department/organization.
+        Could you confirm whether these details are correct and whether you still belong to the same department/organization?
     quick_replies:
       - { id: yes, label: "✅ Yes, details are correct" }
       - { id: no,  label: "❌ No, details are incorrect" }
@@ -475,7 +475,7 @@ nodes:
     type: message
     prompt:
       text: |
-        Kindly confirm which of the following profile details are incorrect:
+        Could you confirm which of the following profile details is incorrect:
     quick_replies:
       - { id: org,   label: "🏢 Organization / Department" }
       - { id: desig, label: "📋 Designation" }
@@ -548,7 +548,7 @@ nodes:
     type: message
     prompt:
       text: |
-        Kindly confirm whether you belong to any of the All India Services, such as:
+        Could you confirm whether you belong to any of the All India Services, such as:
 
         - IAS
         - IPS
@@ -587,11 +587,11 @@ nodes:
         - Batch Information
         - Central Deputation Details
 
-        Kindly update the required details in your profile . Once the profile is updated successfully, the APAR plans will reflect in your account within approximately **4 hours**.
+        Please update the required details in your profile. Once updated, the APAR plans should reflect in your account within approximately **4 hours**.
 
         Kindly update the required details and recheck the APAR section after some time.
 
-        Please feel free to reach out if you require any further assistance.
+        Please feel free to reach out if you need any further assistance.
 
         Thank you,
         **Karmayogi Bharat Support Team**
@@ -611,7 +611,7 @@ nodes:
   - id: mdo_api_error
     type: message
     prompt:
-      text: "MDO Admin details could not be retrieved. Let me check for the YP/AM contact for your organization."
+      text: "We couldn't retrieve the MDO Admin details. Let me check for the YP/AM contact for your organization."
     next: lookup_yp_contact
 
   - id: show_mdo_contact
@@ -619,15 +619,15 @@ nodes:
     prompt:
       text: |
         {% if ctx.collected.cbp_total_count == 0 or ctx.collected.cbp_total_count == None %}
-        Upon checking, we found that no CBP/training plan is currently assigned to your profile.
+        We checked, and no CBP/training plan is currently assigned to your profile.
         Training plans and courses are assigned by the concerned authority.
-        Kindly connect with the contact details below for further assistance:
+        Please connect with the contact details below for further assistance:
         {% elif ctx.collected.ec1_course_name %}
-        Upon checking, we found that the requested course is currently not available in your assigned training/CBP plan.
+        We checked, and the requested course isn't currently available in your assigned training/CBP plan.
         Training plans and course assignments are managed by the concerned authority.
-        We request you to kindly connect with the contact details below for further assistance regarding course allocation/addition:
+        Please connect with the contact details below for further assistance regarding course allocation/addition:
         {% else %}
-        As the training plans/courses are managed and assigned by the concerned authority, we request you to kindly connect with the contact details below for further assistance:
+        As training plans/courses are managed and assigned by the concerned authority, please connect with the contact details below for further assistance:
         {% endif %}
 
         - **Name:** {{ ctx.collected.mdo_admin_name }}
@@ -639,15 +639,15 @@ nodes:
     prompt:
       text: |
         {% if ctx.collected.cbp_total_count == 0 or ctx.collected.cbp_total_count == None %}
-        Upon checking, we found that no CBP/training plan is currently assigned to your profile.
+        We checked, and no CBP/training plan is currently assigned to your profile.
         Training plans and courses are assigned by the concerned authority.
-        Kindly connect with the contact details below for further assistance:
+        Please connect with the contact details below for further assistance:
         {% elif ctx.collected.ec1_course_name %}
-        Upon checking, we found that the requested course is currently not available in your assigned training/CBP plan.
+        We checked, and the requested course isn't currently available in your assigned training/CBP plan.
         Training plans and course assignments are managed by the concerned authority.
-        We request you to kindly connect with the contact details below for further assistance regarding course allocation/addition:
+        Please connect with the contact details below for further assistance regarding course allocation/addition:
         {% else %}
-        As the training plans/courses are managed and assigned by the concerned authority, we request you to kindly connect with the contact details below for further assistance:
+        As training plans/courses are managed and assigned by the concerned authority, please connect with the contact details below for further assistance:
         {% endif %}
 
         - **Name:** {{ ctx.collected.yp_name}}
@@ -661,8 +661,8 @@ nodes:
     type: message
     prompt:
       text: |
-        We were unable to retrieve the MDO Admin or YP/AM contact details for your organization at this time.
-        Kindly reach out to your concerned authority for further assistance.
+        We couldn't retrieve the MDO Admin or YP/AM contact details for your organization at this time.
+        Please reach out to your concerned authority for further assistance.
     next: satisfied
 
 
@@ -674,7 +674,7 @@ nodes:
     type: message
     prompt:
       text: |
-        Upon checking, we could not find an active training plan assigned to your profile.
+        We checked, and couldn't find an active training plan assigned to your profile.
 
         This could mean:
         - A training plan has not yet been assigned by your MDO, or
@@ -733,9 +733,9 @@ nodes:
     type: message
     prompt:
       text: |
-        I'm sorry, I encountered a technical issue while fetching your profile details.
+        I'm sorry, I ran into a technical issue while fetching your profile details.
 
-        Please try again after some time. Thank you for your patience.
+        Please try again after some time — thank you for your patience.
     next: satisfied
 
 
@@ -762,7 +762,7 @@ nodes:
     type: message
     prompt:
       text: |
-        Kindly confirm whether the below profile details are correct:
+        Could you confirm whether the details below are correct:
 
         Organization: {{ ctx.collected.org_name or ctx.collected.org_channel}}
 
@@ -788,7 +788,7 @@ nodes:
     type: collect
     prompt:
       text: |
-        Kindly share the name of the course that is not visible in your training plan.
+        Could you share the name of the course that isn't visible in your training plan?
     field:
       name: collected.ec1_course_name
       type: text
@@ -853,7 +853,7 @@ nodes:
     type: message
     prompt:
       text: |
-        Upon checking, we found that the mentioned course is already part of your training plan and has been successfully completed.
+        We checked, and the mentioned course is already part of your training plan and has been successfully completed.
 
         To view the completed course, please follow the steps below:
 
@@ -872,7 +872,7 @@ nodes:
     type: message
     prompt:
       text: |
-        No APAR courses were found in your assigned training plan at this time.
+        We didn't find any APAR courses in your assigned training plan at this time.
 
         If you believe this is incorrect, please try again after some time or contact your MDO administrator.
     next: satisfied
@@ -881,7 +881,7 @@ nodes:
     type: message
     prompt:
       text: |
-        No Non-APAR courses were found in your assigned training plan at this time.
+        We didn't find any Non-APAR courses in your assigned training plan at this time.
 
         If you believe this is incorrect, please try again after some time or contact your MDO administrator.
     next: satisfied
@@ -891,7 +891,7 @@ nodes:
     type: message
     prompt:
       text: |
-        Upon checking, we found that the course '{{ ctx.collected.ec1_course_name }}' is already available in your assigned training plan.
+        We checked, and the course '{{ ctx.collected.ec1_course_name }}' is already available in your assigned training plan.
 
         To view the mentioned courses, please follow the steps below:
 

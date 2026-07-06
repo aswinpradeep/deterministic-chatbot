@@ -102,7 +102,7 @@ nodes:
     type: message
     prompt:
       text: |
-        I was unable to retrieve your profile details at this time.
+        I couldn't retrieve your profile details at this time.
 
         Please try again in a few minutes.
     next: resolution_check
@@ -127,13 +127,13 @@ nodes:
     type: message
     prompt:
       text: |
-        Upon checking, we found that your profile has already been verified and there are no pending verification requests. 
-        
-        To verify the Verified Karmayogi Badge: 
-        Go to your profile. 
-        Check the area next to your name. 
-        A green tick mark should be visible next to your name. 
-        
+        We checked, and found that your profile has already been verified and there are no pending verification requests.
+
+        To verify the Verified Karmayogi Badge:
+        Go to your profile.
+        Check the area next to your name.
+        A green tick mark should be visible next to your name.
+
         The green tick indicates that the Verified Karmayogi Badge has been successfully assigned to your profile.
     next: resolution_check
 
@@ -220,7 +220,7 @@ nodes:
       text: |
         Your designation request has already been submitted. However, there is currently no Organization Admin available to approve the request. 
         
-        Kindly connect with the concerned YP for further assistance. 
+        Please connect with the concerned YP for further assistance.
         YP Name: {{ ctx.collected.yp_name }}
         YP Email ID: {{ ctx.collected.yp_email }}
     next: resolution_check
@@ -231,7 +231,7 @@ nodes:
       text: |
         Your designation request has already been submitted. However, there is currently no Organization Admin available to approve the request. 
         
-        Kindly connect with the concerned YP for further assistance.
+        Please connect with the concerned YP for further assistance.
     next: resolution_check
 
   # ===========================================================================
@@ -351,8 +351,8 @@ nodes:
     type: message
     prompt:
       text: |
-        We can confirm that your designation request has been submitted successfully. 
-        Kindly log out and log in again to verify the status. 
+        We can confirm that your designation request has been submitted successfully.
+        Please log out and log in again to verify the status.
         The request is awaiting approval from the Organization Admin. 
         Admin Name: {{ ctx.collected.mdo_leader_name or ctx.collected.mdo_leader_name_fallback }}
         Admin Email ID: {{ ctx.collected.mdo_leader_email or ctx.collected.mdo_leader_email_fallback }}

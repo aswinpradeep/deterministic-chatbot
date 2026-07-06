@@ -274,7 +274,7 @@ nodes:
   - id: kc_api_error
     type: message
     prompt:
-      text: "Unable to fetch karma points history at this moment. Please try again in a few minutes."
+      text: "We couldn't fetch your karma points history at this moment. Please try again in a few minutes."
     next: satisfied
 
   # ===========================================================================
@@ -395,7 +395,7 @@ nodes:
   - id: ev_api_error
     type: message
     prompt:
-      text: "Unable to retrieve event details at this moment. Please try again in a few minutes."
+      text: "We couldn't retrieve event details at this moment. Please try again in a few minutes."
     next: satisfied
 
   # ===========================================================================
@@ -530,7 +530,7 @@ nodes:
   - id: ec1_api_error
     type: message
     prompt:
-      text: "Unable to retrieve karma points history at this moment. Please try again in a few minutes."
+      text: "We couldn't retrieve your karma points history at this moment. Please try again in a few minutes."
     next: satisfied
 
   # ===========================================================================

@@ -136,7 +136,7 @@ nodes:
     type: message
     prompt:
       text: |
-        I'm sorry, I was unable to find an account matching your profile details.
+        I'm sorry, but I couldn't find an account matching your profile details.
 
     next: satisfied
 
@@ -148,9 +148,9 @@ nodes:
       text: |
         ✅ **Transfer Request Found**
 
-        We have reviewed your request and found that a transfer request has already been raised to the **{{ ctx.collected.transfer_org_name or ctx.collected.transfer_dept_name or ctx.collected.fetched_org_name or ctx.collected.profile_org_name or "organization" }}**.
+        We've checked, and a transfer request has already been raised to the **{{ ctx.collected.transfer_org_name or ctx.collected.transfer_dept_name or ctx.collected.fetched_org_name or ctx.collected.profile_org_name or "organization" }}**.
 
-        Kindly confirm whether this organization is correct.
+        Could you confirm whether this organization is correct?
     quick_replies:
       - { id: yes, label: "✅ Yes, that's correct" }
       - { id: no,  label: "❌ No, wrong organization" }
@@ -199,7 +199,7 @@ nodes:
       text: |
         ✅ **MDO Admin Contact Information**
 
-        We have identified the MDO Admin for the **{{ ctx.collected.transfer_org_name or ctx.collected.transfer_dept_name or ctx.collected.fetched_org_name or ctx.collected.profile_org_name }}** organization.
+        We've identified the MDO Admin for the **{{ ctx.collected.transfer_org_name or ctx.collected.transfer_dept_name or ctx.collected.fetched_org_name or ctx.collected.profile_org_name }}** organization.
         
         **Contact Details:**
         - **Name:** {{ ctx.collected.mdo_admin_name or "MDO Admin" }}
@@ -217,7 +217,7 @@ nodes:
       text: |
         **Cancel Current Request**
 
-        Since the organization is incorrect, you need to cancel the current transfer request and raise a fresh one with the correct organization.
+        Since the organization is incorrect, you'll need to cancel the current transfer request and raise a fresh one with the correct organization.
     steps:
       - "Log in to iGOT Karmayogi."
       - "Click on **Profile Icon** (Top Right Corner)."
@@ -238,7 +238,7 @@ nodes:
       text: |
         📋 **Raise a Transfer Request**
 
-        Your previous department's MDO has marked your profile as **'Not My User'**. Therefore, you are required to raise a **Transfer Request** to regain access to the platform.
+        Your previous department's MDO has marked your profile as **'Not My User'**. Therefore, you'll need to raise a **Transfer Request** to regain access to the platform.
     steps:
       - "Log in to iGOT Karmayogi."
       - "Click on **Profile Icon** (Top Right Corner)."
@@ -250,7 +250,7 @@ nodes:
       - "Your request will be sent to the concerned MDO Admin for approval."
       - "Access will be restored once the MDO Admin approves the request."
     follow_up:
-      text: "Are you facing any issues while raising the request?"
+      text: "Are you facing any issues raising the request?"
       quick_replies:
         - { id: done,   label: "✅ I've submitted it" }
         - { id: greyed, label: "Button is disabled" }
@@ -269,7 +269,7 @@ nodes:
       text: |
         **"Make Transfer Request" Button is Disabled**
 
-        This usually happens when you have a pending request under your **Primary Details** section.
+        This is usually because you have a pending request under your **Primary Details** section.
     steps:
       - "Log in to iGOT Karmayogi."
       - "Go to **Profile** (Top Right Corner)."
@@ -284,7 +284,7 @@ nodes:
     type: message
     prompt:
       text: |
-        To help locate your organization, please select your organization category:
+        To help locate your organization, could you select your organization category?
     quick_replies:
       - { id: central, label: "🏛️ Central Government / Ministry" }
       - { id: state,   label: "🏙️ State Government" }
@@ -637,7 +637,7 @@ nodes:
       text: |
         ✅ **SPOC Details Found**
 
-        Please reach out to the concerned YP/SPOC contact below:
+        Please get in touch with the concerned YP/SPOC using the details below:
 
         - **Name:** {{ ctx.collected.yp_name or "YP Contact" }}
         - **Email:** {{ ctx.collected.yp_email or "N/A" }}
@@ -653,7 +653,7 @@ nodes:
       text: |
         ✅ **SPOC Details Found**
 
-        Please reach out to the concerned YP/SPOC contact below:
+        Please get in touch with the concerned YP/SPOC using the details below:
 
         - **Name:** {{ ctx.collected.yp_name or "YP Contact" }}
         - **Email:** {{ ctx.collected.yp_email or "N/A" }}
@@ -668,7 +668,7 @@ nodes:
     type: message
     prompt:
       text: |
-        We could not find the SPOC details for your organization in our current records.
+        We couldn't find the SPOC details for your organization in our current records.
     next: satisfied
 
   # ===========================================================================
@@ -678,9 +678,9 @@ nodes:
     type: message
     prompt:
       text: |
-        I'm sorry, I encountered a technical issue while checking your profile and can't proceed with the automated steps right now.
+        I'm sorry, I ran into a technical issue while checking your profile and can't proceed with the automated steps right now.
 
-        Please try again after some time. Thank you for your patience.
+        Please try again after some time — thank you for your patience.
     next: satisfied
 
 
