@@ -148,7 +148,7 @@ class Activity(BaseModel):
 
     @classmethod
     def end(cls, outcome: str = "ended", content: str | None = None) -> Self:
-        return cls(type="end", outcome=outcome, content=content)
+        return cls(type="end", outcome=outcome, content=content, disable_input=True)
 
     @classmethod
     def trace(cls, lines: list[str]) -> Self:
