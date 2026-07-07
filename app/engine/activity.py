@@ -92,8 +92,8 @@ class Activity(BaseModel):
         return cls(type="text", content=content)
 
     @classmethod
-    def markdown(cls, content: str) -> Self:
-        return cls(type="markdown", content=content)
+    def markdown(cls, content: str, disable_input: bool = False) -> Self:
+        return cls(type="markdown", content=content, disable_input=disable_input)
 
     @classmethod
     def quick_replies(cls, choices: list[QuickReply], disable_input: bool = True) -> Self:

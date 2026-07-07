@@ -66,7 +66,9 @@ class MessageNode(NodeHandler):
             activities: list[dict] = []
             if text:
                 activities.append(
-                    Activity.markdown(text).model_dump(exclude_none=True)
+                    Activity.markdown(text, disable_input=disable_input).model_dump(
+                        exclude_none=True
+                    )
                 )
 
             if quick_replies_raw:
