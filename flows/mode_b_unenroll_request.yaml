@@ -39,21 +39,17 @@ nodes:
   # 1. Inform user — unenrollment is not available
   # ===========================================================================
   - id: inform_unavailable
-    type: resolution
+    type: message
     prompt:
       text: |
-        Currently, there is **no functionality available on iGOT Karmayogi to unenroll** from an enrolled course, program, or event.
+        Currently, there is **no functionality available on our platofrm to unenroll** from an enrolled course, program, or event.
 
-        This is a platform-level limitation.
-    steps:
-      - "You may **continue and complete** the enrolled content at your own pace"
-      - "Alternatively, you may **ignore the enrolled content** — it will remain in your profile but will not affect your other courses or progress"
-    follow_up:
-      text: "Is there anything else I can help you with?"
-      quick_replies:
-        - { id: ok, label: "✅ Understood, thank you" }
-    on_reply:
-      ok: satisfied
+        You may **continue and complete** the enrolled content 
+        Alternatively, you may **ignore the enrolled content** — it will remain in your profile but will not affect your other courses or progress
+
+        Hope this helps you.
+    disable_input: true
+    next: satisfied
 
   # ── Terminal nodes ────────────────────────────────────────────────────────────
   - id: satisfied
