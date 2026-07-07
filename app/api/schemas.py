@@ -12,11 +12,24 @@ from uuid import UUID
 from pydantic import BaseModel
 
 
+class MessageEntry(BaseModel):
+    """One turn in the conversation — either a user action or a bot response."""
+    role: Literal["user", "bot"]
+    action: str | None = None        # user messages: the action type (select_choice, send_message, etc.)
+    text: str | None = None          # user messages: display text of what the user did
+    activities: list[dict[str, Any]] | None = None  # bot messages: the activities array
+    ts: str | None = None            # ISO timestamp
+
+
+class HistoryResponse(BaseModel):
+    """Response for GET /sessions/{id}/history."""
+    session_id: UUID
+    messages: list[MessageEntry]
+
+
 class StartSessionRequest(BaseModel):
     channel: Literal["web", "mobile", "whatsapp", "voice"] = "web"
     language: str = "en"
-    # Optional resume hint — if client has a prior session_id in localStorage
-    resume_session_id: UUID | None = None
 
 
 class TurnRequest(BaseModel):
@@ -61,4 +74,15 @@ class TurnResponse(BaseModel):
 
 
 class StartSessionResponse(TurnResponse):
-    resumed: bool = False
+    pass
+
+
+class ActiveSessionResponse(BaseModel):
+    """Response for GET /sessions/mine.
+
+    session_id is null when no active session exists or Redis is unavailable.
+    Clients should call POST /sessions to start a new one in that case.
+    """
+    session_id: UUID | None = None
+    status: str | None = None
+    flow_id: str | None = None

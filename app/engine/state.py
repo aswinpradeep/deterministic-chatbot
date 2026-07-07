@@ -5,12 +5,12 @@ LangGraph persists this to Redis after every node execution via the checkpointer
 
 from __future__ import annotations
 
+import operator
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
-from langgraph.graph.message import add_messages
 from pydantic import BaseModel, Field
 
 
@@ -36,13 +36,14 @@ class FlowStatus(str, Enum):
 class TicketDraft(BaseModel):
     """LLM-generated or template-generated ticket fields prior to Zoho POST."""
     subject: str
-    description: str
+    description: str          # markdown — shown in chat confirmation preview
     category: str
     sub_category: str | None = None
     classification: str = "Query"
     priority: str = "P3"
     severity: str = "Sev 3"
     portal: str = "Learner Portal"
+    conversation_trail: str = ""  # HTML <ol> — user's readable selections for Zoho body
 
 
 class ConversationState(BaseModel):
@@ -65,8 +66,10 @@ class ConversationState(BaseModel):
     current_node: str | None = None
     status: FlowStatus = FlowStatus.ACTIVE
 
-    # --- LangGraph message log (append-only) ---
-    messages: Annotated[list, add_messages] = Field(default_factory=list)
+    # --- Conversation history (append-only via operator.add) ---
+    # Each entry is a plain dict: {"role": "user"|"bot", ...} for history tracking,
+    # or a LangChain BaseMessage for LLM transcript. operator.add appends on every update.
+    messages: Annotated[list, operator.add] = Field(default_factory=list)
 
     # --- Structured data captured by `collect` nodes ---
     collected: dict[str, Any] = Field(default_factory=dict)
@@ -83,6 +86,11 @@ class ConversationState(BaseModel):
 
     # --- LLM usage tracking (cost cap enforcement) ---
     llm_calls_this_session: int = 0
+
+    # --- Auth (not exposed to YAML templates or LLM context) ---
+    # Raw Keycloak JWT for flows that need to forward the user token to privileged APIs.
+    # Access only via the "__SESSION_TOKEN__" sentinel in YAML header values — never via ctx.
+    session_token: str = ""
 
     # --- Misc ---
     last_activity_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

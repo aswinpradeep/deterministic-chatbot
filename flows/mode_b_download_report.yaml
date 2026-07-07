@@ -25,7 +25,8 @@ version: 1
 metadata:
   category:         platform
   menu_label:       "📑 Unable to download report"
-  menu_group:       "Reports & Data"
+  menu_group:       "Recognition & Engagement"
+  menu_group_order: 4
   menu_order:       10
   classification:   Service Request
   default_portal:   MDO Portal
@@ -58,7 +59,7 @@ nodes:
   - id: ask_report_error
     type: message
     prompt:
-      text: "Kindly share the exact error message displayed while accessing the reports."
+      text: "Could you share the exact error message displayed while accessing the reports?"
     quick_replies:
       - { id: NO_MDO_LEADER,      label: "\"Organisation does not have an MDO Leader\"" }
       - { id: ACCESS_EXPIRED,     label: "\"Your access to the report has expired\"" }
@@ -80,11 +81,11 @@ nodes:
     type: message
     prompt:
       text: |
-        Upon checking, we found that your profile is mapped to the following organization:
+        We checked, and found that your profile is mapped to the following organization:
 
         **Organization:** {{ ctx.collected.org_channel | default('Not found') }}
 
-        Kindly confirm whether you belong to the above organization.
+        Could you confirm whether you belong to this organization?
     quick_replies:
       - { id: YES, label: "✅ Yes, I belong to this organization" }
       - { id: NO,  label: "❌ No, different organization" }
@@ -98,7 +99,7 @@ nodes:
   - id: escalate_api_error
     type: message
     prompt:
-      text: "We encountered a technical issue while fetching your profile details. Please try again later or contact support."
+      text: "We ran into a technical issue while fetching your profile details. Please try again later or contact support."
     next: satisfied
 
   # ===========================================================================
@@ -119,7 +120,7 @@ nodes:
   - id: capture_correct_org_details
     type: collect
     prompt:
-      text: "Kindly share your correct Ministry, Department, or State details so that we can identify the appropriate point of contact."
+      text: "Could you share your correct Ministry, Department, or State details so we can identify the appropriate point of contact?"
     field:
       name: collected.correct_org_details
       type: text
@@ -131,7 +132,7 @@ nodes:
       text: |
         *[API Placeholder]* Fetching YP/AM details for: {{ ctx.collected.correct_org_details }}...
         
-        Upon checking, we found that your profile is mapped to a different organization.
+        We checked, and found that your profile is mapped to a different organization.
         Please contact the below point of contact for further assistance:
 
         **Name:** <YP/AM Name>
@@ -155,7 +156,7 @@ nodes:
     type: message
     prompt:
       text: |
-        We encountered an issue checking the MDO Leader status for your organization.
+        We ran into an issue checking the MDO Leader status for your organization.
         Please contact the below YP/AM for further assistance:
         **Name:** <YP/AM Name>
         **Email ID:** <YP/AM Email>
@@ -182,7 +183,7 @@ nodes:
     type: message
     prompt:
       text: |
-        Upon checking, we found that an MDO Leader **is** mapped to your organization.
+        We checked, and found that an MDO Leader **is** mapped to your organization.
 
         Please contact the below MDO Leader for report access support:
         **MDO Leader Name:** {{ ctx.collected.mdo_admin_name }}
@@ -197,7 +198,7 @@ nodes:
     type: message
     prompt:
       text: |
-        Upon checking, we found that your report access validity has expired.
+        We checked, and found that your report access validity has expired.
         
         Are you the **MDO Leader** of your organization, or a regular user?
     quick_replies:
@@ -254,7 +255,7 @@ nodes:
     type: message
     prompt:
       text: |
-        Upon checking, we found that no MDO Leader is currently mapped to your organization.
+        We checked, and found that no MDO Leader is currently mapped to your organization.
 
         Please contact the below YP/AM for further assistance:
         *[API Placeholder]* **Name:** <YP/AM Name>
@@ -284,10 +285,5 @@ nodes:
     type: message
     prompt:
       text: |
-        For further assistance, please write to **support@igotkarmayogi.gov.in** with:
-        - Your name and organisation name
-        - The exact error message you are seeing
-        - The report you are trying to access
-
-        Our support team will investigate and get back to you.
+        We're facing a technical issue with this report right now. Please try again after some time. Thank you for your patience.
     next: satisfied

@@ -18,7 +18,8 @@ version: 1
 metadata:
   category:         course
   menu_label:       "📝 Feedback / Rating issue"
-  menu_group:       "Learning"
+  menu_group:       "Content Related Issue"
+  menu_group_order: 2
   menu_order:       5
   classification:   Query
   default_portal:   Learner Portal
@@ -47,7 +48,7 @@ nodes:
       text: |
         The course progress may take some time to update. You will be eligible to rate the course only after the progress is fully updated.
         
-        We kindly request you to check again after **4–5 hours**.
+        Please check again after **4–5 hours**.
         
         > ℹ️ **Please note that rating the course is not mandatory for certificate generation.**
         

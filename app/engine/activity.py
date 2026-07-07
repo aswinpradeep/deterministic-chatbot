@@ -28,8 +28,10 @@ class PickerItem(BaseModel):
     """A single item in a picker activity."""
     id: str
     label: str
-    meta: str | None = None           # Sub-label, e.g. "Completed · 12 May 2026"
+    meta: str | None = None              # Sub-label string, e.g. "Ends: 12 May 2026"
+    progress: dict | None = None         # Structured status object, e.g. {"status": "Not Started"}
     extra: dict[str, Any] | None = None  # Extra data carried back on selection
+    children: list['PickerItem'] | None = None  # Nested children for accordion/groups
 
 
 class Activity(BaseModel):
@@ -40,7 +42,9 @@ class Activity(BaseModel):
         "markdown",
         "quick_replies",
         "picker",
+        "nested_picker",
         "input",
+        "action_button",
         "typing",
         "end",
         "trace",
@@ -55,9 +59,16 @@ class Activity(BaseModel):
     # picker
     picker_id: str | None = None
     placeholder: str | None = None
+    title: str | None = None
+    show_status: bool | None = Field(default=None, serialization_alias="showStatus")
     items: list[PickerItem] | None = None
     other_option: QuickReply | None = None
     search_enabled: bool = True
+    total_items: int | None = None
+
+    # action_button
+    label: str | None = None           # Button label text, e.g. "Click here to open the course"
+    url: str | None = None             # Destination URL the frontend should open
 
     # input
     input_id: str | None = None
@@ -95,15 +106,37 @@ class Activity(BaseModel):
         items: list[PickerItem],
         placeholder: str | None = None,
         other_option: QuickReply | None = None,
+        title: str | None = None,
+        show_status: bool | None = None,
     ) -> Self:
+        is_nested = any(bool(item.children) for item in items)
+        total = (
+            sum(len(item.children) for item in items if item.children)
+            if is_nested else len(items)
+        )
+        show_status_val = show_status if show_status is not None else True
         return cls(
-            type="picker",
+            type="nested_picker" if is_nested else "picker",
             picker_id=picker_id,
             items=items,
             placeholder=placeholder,
             other_option=other_option,
             disable_input=True,
+            total_items=total,
+            title=title,
+            show_status=show_status_val if is_nested else None,
         )
+
+    @classmethod
+    def action_button(cls, label: str, url: str, content: str | None = None) -> Self:
+        """Structured tappable link — frontend opens `url` in WebView / browser.
+
+        Args:
+            label:   Button text the user sees, e.g. "Click here to open the course".
+            url:     Full destination URL.
+            content: Optional introductory text shown above the button.
+        """
+        return cls(type="action_button", label=label, url=url, content=content)
 
     @classmethod
     def input(cls, input_id: str, placeholder: str = "") -> Self:

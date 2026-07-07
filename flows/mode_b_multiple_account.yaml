@@ -1,0 +1,97 @@
+# =============================================================================
+# MODE B — DETERMINISTIC + LLM TICKET TAIL
+# =============================================================================
+# Flow: Multiple Accounts — Email ID / Mobile Number Update (UC-10)
+#
+# SOP: Multiple Accounts — Email / Mobile Number Update
+#
+# Triggered when a user:
+#   (a) Tries to update their Email ID or Mobile Number
+#   (b) Receives an error during the update
+#   (c) Attempts to update using an already-registered identifier
+#
+# High-level branching:
+#   STEP 1  → Collect identifier (email or mobile) from user
+#
+#   STEP 2  → [Email only] GET /api/user/v1/email/approvedDomains
+#               domain NOT valid → fetch MDO leader → share contact → close
+#               domain valid     → proceed to Step 3
+#
+#   STEP 3  → POST /api/private/user/v1/search  (check if identifier already registered)
+#               NOT registered  → guide user through self-service OTP path
+#                   │              (View Profile → Other Details → Edit → OTP)
+#                   └── OTP not received → fetch MDO / YP contact → close
+#               ALREADY registered → fetch conflict account details → decision tree
+#
+#   STEP 4  → [Conflict path] POST /api/course/private/v4/user/enrollment/list/{conflict_user_id}
+#               Case A — User says NO   → close politely
+#               Case B — User wants merge → inform not possible → close
+#               Case C — User confirms YES →
+#                   Fetch current account enrollments
+#                   Show impact summary + email confirmation
+#                   Final YES  → raise Zoho support ticket
+#                   Final NO   → restart from STEP 1
+#
+# ⚠️  OTP generation / verification is NOT performed by the support workflow.
+#      The user must complete OTP steps through their own profile page.
+#
+# All business logic nodes are provided by the _multiple_account shared fragment.
+# APIs used:
+#   GET  /api/user/v1/email/approvedDomains
+#   GET  /api/user/private/v1/read/{user_id}
+#   POST /api/private/user/v1/search           (registration check + MDO_LEADER lookup)
+#   POST /api/course/private/v4/user/enrollment/list/{user_id}   (enrollment counts)
+# =============================================================================
+
+flow_id: MULTIPLE_ACCOUNT
+flow_type: deterministic_with_llm_fallback
+version: 2
+
+metadata:
+  category: account
+  menu_label: "👥 Email / Mobile already registered"
+  menu_group: "Profile & User Management"
+  menu_group_order: 1
+  menu_order: 3
+  classification: Service Request
+  default_portal: Learner Portal
+  default_priority: P3
+  default_severity: Sev 3
+
+enabled_channels: [web]
+
+classification:
+  triggers:
+    - "email already registered"
+    - "mobile already registered"
+    - "email id already exists"
+    - "mobile number already exists"
+    - "unable to update email"
+    - "error updating mobile"
+    - "update email error"
+    - "update mobile error"
+    - "duplicate account email"
+    - "another account with same email"
+    - "email conflict"
+    - "mobile conflict"
+    - "multiple account issue"
+
+entry_node: ask_identifier_type
+
+imports:
+  - _terminal
+  - _yp_lookup
+  - _multiple_account
+  - fragment: _zoho_ticket
+    with:
+      cf_category: account
+      cf_sub_category: multiple_account_email_mobile_conflict
+      cf_flow_id: MULTIPLE_ACCOUNT
+
+nodes: []
+# All nodes are provided by the _multiple_account shared fragment.
+# Note: confirm_ticket, ticket_confirmation, ticket_raised_end, ticket_failed,
+#       ticket_failed_end are provided by the _zoho_ticket import above.
+#       satisfied, ticket_raised_end come from _terminal.
+#       lookup_yp_contact comes from _yp_lookup; its targets (yp_found_result,
+#       yp_not_found) are defined inside _multiple_account.

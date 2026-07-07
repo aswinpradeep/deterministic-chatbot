@@ -30,7 +30,7 @@ shared_nodes:
     type: end
     outcome: self_served
     prompt:
-      text: "Glad I could help! 🙏 Take care."
+      text: "I hope this helps. Please let me know if you need any further assistance."
 
   - id: shared_collect_dissatisfaction
     type: message
@@ -93,4 +93,4 @@ shared_nodes:
     type: end
     outcome: error
     prompt:
-      text: "I couldn't raise the ticket. Please email support@igotkarmayogi.gov.in directly. Apologies."
+      text: "I'm facing a technical issue and couldn't raise the ticket right now. Please try again after some time. Thank you for your patience."

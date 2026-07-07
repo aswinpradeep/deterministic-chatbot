@@ -6,7 +6,7 @@ nodes:
     type: end
     outcome: self_served
     prompt:
-      text: "Glad I could help! 🙏"
+      text: "I hope this helps. Please let me know if you need any further assistance."
 
   - id: ticket_raised_end
     type: end

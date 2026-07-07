@@ -262,6 +262,23 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .qr.other { border-style: dashed; color: var(--muted); border-color: var(--border); }
 .qr.other:hover { background: var(--surface-2); color: var(--text); border-color: var(--muted); }
 
+/* —— Action button (course link) ——————————————————————————————————— */
+.action-btn-wrap {
+  margin: 6px 0;
+}
+.action-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: var(--accent);
+  color: #fff;
+  border-radius: var(--r-sm);
+  padding: 9px 18px;
+  font-size: 13px; font-weight: 600;
+  text-decoration: none;
+  transition: background .15s, transform .1s;
+  border: none; cursor: pointer;
+}
+.action-btn:hover { background: var(--accent-hover); transform: translateY(-1px); }
+
 /* ── Picker ──────────────────────────────────────────────────────────────── */
 .picker-wrap {
   border: 1px solid var(--border);
@@ -292,6 +309,35 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .pick-label { font-size: 13px; color: var(--text); }
 .pick-meta  { font-size: 11px; color: var(--muted); }
 .no-res     { padding: 12px; text-align: center; color: var(--muted); font-size: 12px; }
+
+/* Nested picker groups */
+.pick-parent {
+  padding: 8px 12px; cursor: pointer;
+  display: flex; justify-content: space-between; align-items: center;
+  transition: background .1s;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  font-weight: 500;
+  font-size: 13px; color: var(--text);
+}
+.pick-parent:hover { background: var(--accent-light); }
+.pick-parent-arrow {
+  transition: transform .2s;
+  font-size: 10px; color: var(--muted);
+}
+.pick-parent.open .pick-parent-arrow {
+  transform: rotate(180deg);
+}
+.pick-children {
+  display: none;
+  background: var(--surface);
+}
+.pick-children.open {
+  display: block;
+}
+.pick-children .pick-item {
+  padding-left: 24px;
+}
 
 /* ── Disabled / status strip ─────────────────────────────────────────────── */
 .status-strip {
@@ -441,6 +487,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
       <div class="sb-actions">
         <button class="btn-s" onclick="checkHealth()" title="GET /health">💓 Health</button>
         <button class="btn-s" onclick="copyId()"     title="Copy session UUID">📋 Copy ID</button>
+        <button class="btn-s" onclick="showHistory()" title="GET /sessions/history/{id}">📜 History</button>
         <button class="btn-s" onclick="showCollected()" title="Fetch /admin trace">🔍 Trace</button>
       </div>
       <p style="font-size:11px;color:var(--muted);margin-top:8px;line-height:1.5">
@@ -503,7 +550,7 @@ function url(path) { return CFG.api + path; }
 function hdrs() {
   return {
     'Content-Type': 'application/json',
-    'Authorization': 'Bearer ' + CFG.jwt,
+    'x-authenticated-user-token': CFG.jwt,
   };
 }
 
@@ -531,7 +578,7 @@ async function startSession() {
   setStrip('Connecting…');
 
   try {
-    const r = await fetch(url('/ai-chatbot/v1/sessions'), {
+    const r = await fetch(url('/ai-chatbot/v1/sessions/create'), {
       method: 'POST',
       headers: hdrs(),
       body: JSON.stringify({ channel: 'web', language: S.language }),
@@ -554,7 +601,7 @@ async function turn(payload) {
   disableInput();
   showTyping();
   try {
-    const r = await fetch(url('/ai-chatbot/v1/sessions/' + S.sessionId + '/turn'), {
+    const r = await fetch(url('/ai-chatbot/v1/sessions/turn/' + S.sessionId), {
       method: 'POST',
       headers: hdrs(),
       body: JSON.stringify(payload),
@@ -593,6 +640,7 @@ function renderActivities(activities) {
         break;
 
       case 'picker':
+      case 'nested_picker':
         if (a.content) appendBot(esc(a.content), false);
         nextMode  = 'picker';
         nextPkr   = a;
@@ -601,6 +649,10 @@ function renderActivities(activities) {
       case 'input':
         if (a.content) appendBot(esc(a.content), false);
         nextMode = 'text';
+        break;
+
+      case 'action_button':
+        appendActionButton(a);
         break;
 
       case 'typing':
@@ -663,16 +715,31 @@ function appendUser(text) {
 
 function appendEndBanner(a) {
   const outcome = a.outcome || 'ended';
-  const icons   = { self_served:'✅', ticket_raised:'🎫', ticket_failed:'⚠️', ended:'👋' };
+  if (outcome === 'self_served') return;
+  
+  const icons   = { ticket_raised:'🎫', ticket_failed:'⚠️', ended:'👋' };
   const texts   = {
-    self_served:   'Issue resolved — hope that helped!',
     ticket_raised: 'Ticket raised' + (a.content ? ': ' + a.content : '.'),
-    ticket_failed: 'Ticket could not be raised — please email support@igotkarmayogi.gov.in',
+    ticket_failed: 'Ticket could not be raised — please try again after some time.',
     ended:         a.content || 'Conversation ended.',
   };
   const d = el('div', 'end-banner ' + outcome);
   d.innerHTML = (icons[outcome] || '—') + ' ' + esc(texts[outcome] || outcome);
   msgs().appendChild(d);
+}
+
+function appendActionButton(a) {
+  const row = el('div', 'row bot');
+  row.innerHTML = `
+    <div class="av bot">🤖</div>
+    <div class="bub">
+      <div class="action-btn-wrap">
+        <a class="action-btn" href="${escA(a.url || '#')}" target="_blank" rel="noopener noreferrer">
+          ${esc(a.label || 'Open')}
+        </a>
+      </div>
+    </div>`;
+  msgs().appendChild(row);
 }
 
 function appendTrace(lines) {
@@ -723,12 +790,33 @@ function renderQR(a) {
 function renderPicker(a) {
   const items = a.items || [];
   const pid   = 'pl_' + (a.picker_id || 'p');
-  let itemsHtml = items.map(item =>
-    `<div class="pick-item" onclick="doPick('${escA(a.picker_id||'')}','${escA(item.id)}','${escA(item.label)}')">
-       <span class="pick-label">${esc(item.label)}</span>
-       ${item.meta ? `<span class="pick-meta">${esc(item.meta)}</span>` : ''}
-     </div>`
-  ).join('');
+
+  function renderItem(item) {
+    if (item.children && item.children.length > 0) {
+      const cid = 'ch_' + item.id.replace(/[^a-zA-Z0-9]/g, '_');
+      const childrenHtml = item.children.map(c => renderItem(c)).join('');
+      return `
+        <div class="pick-group">
+          <div class="pick-parent" onclick="togglePickGroup('${cid}', this)">
+            <span>${esc(item.label)}</span>
+            <span class="pick-parent-arrow">▼</span>
+          </div>
+          <div class="pick-children" id="${cid}">
+            ${childrenHtml}
+          </div>
+        </div>
+      `;
+    } else {
+      return `
+        <div class="pick-item" onclick="doPick('${escA(a.picker_id||'')}','${escA(item.id)}','${escA(item.label)}')">
+          <span class="pick-label">${esc(item.label)}</span>
+          ${item.meta ? `<span class="pick-meta">${esc(item.meta)}</span>` : ''}
+        </div>
+      `;
+    }
+  }
+
+  let itemsHtml = items.map(item => renderItem(item)).join('');
 
   inputArea().innerHTML = `
     <div class="picker-wrap">
@@ -745,6 +833,14 @@ function renderPicker(a) {
   document.getElementById(pid)?.focus();
 }
 
+function togglePickGroup(id, el) {
+  const childrenDiv = document.getElementById(id);
+  if (childrenDiv) {
+    childrenDiv.classList.toggle('open');
+    el.classList.toggle('open');
+  }
+}
+
 function filterPicker(searchId) {
   const q     = document.getElementById(searchId)?.value.toLowerCase() || '';
   const pkr   = S.pendingPkr;
@@ -753,13 +849,48 @@ function filterPicker(searchId) {
   if (!list) return;
 
   let visible = 0;
-  for (const item of list.querySelectorAll('.pick-item')) {
+
+  // Handle pick-groups
+  for (const group of list.querySelectorAll('.pick-group')) {
+    let groupVisible = false;
+    const parent = group.querySelector('.pick-parent');
+    const parentLbl = parent?.textContent.toLowerCase() || '';
+    const childrenDiv = group.querySelector('.pick-children');
+    const children = group.querySelectorAll('.pick-item');
+    
+    let parentMatch = (!q || parentLbl.includes(q));
+    if (parentMatch && q) groupVisible = true;
+
+    for (const child of children) {
+      const lbl  = child.querySelector('.pick-label')?.textContent.toLowerCase() || '';
+      const meta = child.querySelector('.pick-meta')?.textContent.toLowerCase() || '';
+      const show = !q || parentMatch || lbl.includes(q) || meta.includes(q);
+      child.style.display = show ? '' : 'none';
+      if (show && q) groupVisible = true;
+    }
+    
+    if (!q) {
+      groupVisible = true;
+      childrenDiv?.classList.remove('open');
+      parent?.classList.remove('open');
+    } else if (groupVisible) {
+      childrenDiv?.classList.add('open');
+      parent?.classList.add('open');
+    }
+
+    group.style.display = groupVisible ? '' : 'none';
+    if (groupVisible) visible++;
+  }
+
+  // Handle top-level flat items (not in groups)
+  for (const item of list.querySelectorAll(':scope > .pick-item')) {
     const lbl  = item.querySelector('.pick-label')?.textContent.toLowerCase() || '';
     const meta = item.querySelector('.pick-meta')?.textContent.toLowerCase() || '';
     const show = !q || lbl.includes(q) || meta.includes(q);
     item.style.display = show ? '' : 'none';
     if (show) visible++;
   }
+
   let noRes = list.querySelector('.no-res');
   if (!visible && q) {
     if (!noRes) { noRes = el('div', 'no-res'); list.appendChild(noRes); }
@@ -878,6 +1009,18 @@ async function showCollected() {
     sec.style.display = '';
     document.getElementById('collectedData').textContent = JSON.stringify(d, null, 2);
     toast('Trace loaded');
+  } catch(e) { toast('Error: ' + e.message, true); }
+}
+
+async function showHistory() {
+  if (!S.sessionId) { toast('No session'); return; }
+  try {
+    const r = await fetch(url('/ai-chatbot/v1/sessions/history/' + S.sessionId), { headers: hdrs() });
+    const d = await r.json();
+    const sec = document.getElementById('collectedSection');
+    sec.style.display = '';
+    document.getElementById('collectedData').textContent = JSON.stringify(d, null, 2);
+    toast('History loaded — ' + (d.messages?.length || 0) + ' messages');
   } catch(e) { toast('Error: ' + e.message, true); }
 }
 

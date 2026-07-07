@@ -55,7 +55,7 @@ from langgraph.graph import END
 
 from langchain_core.messages import AIMessage
 
-from app.engine.activity import Activity, PickerItem
+from app.engine.activity import Activity, PickerItem, QuickReply
 from app.engine.nodes.base import NodeHandler
 from app.engine.state import ConversationState, FlowStatus
 from app.engine.template import render
@@ -74,6 +74,10 @@ class CollectNode(NodeHandler):
         # is collected one at a time before proceeding to next node.
         if cfg.get("prompts"):
             return None  # handled by register_conditional_edges()
+        # dynamic_options with on_empty: needs conditional edges
+        on_empty = cfg.get("on_empty") or (cfg.get("dynamic_options") or {}).get("on_empty")
+        if on_empty:
+            return None  # handled by register_conditional_edges()
         # Single-field or dynamic_options: simple static edge
         return cfg.get("next")
 
@@ -85,12 +89,37 @@ class CollectNode(NodeHandler):
         the graph stays on this node (interrupt_after fires each iteration) until
         all required fields have values in state.collected.
         """
+        node_id = cfg["id"]
+        next_target = cfg.get("next")
+        on_empty = cfg.get("on_empty") or (cfg.get("dynamic_options") or {}).get("on_empty")
+        on_other = cfg.get("on_other")
+
+        if (on_empty or on_other) and cfg.get("dynamic_options"):
+            field_cfg_r = cfg.get("field")
+            field_key = field_cfg_r["name"].removeprefix("collected.") if field_cfg_r else None
+
+            def route_picker(state: ConversationState) -> str:
+                c = state.collected or {}
+                if on_other and c.get("_other_requested"):
+                    return on_other
+                if field_key and c.get(field_key) is None:
+                    return on_empty or next_target or node_id
+                return next_target or node_id
+
+            targets = set()
+            if on_empty:
+                targets.add(on_empty)
+            if on_other:
+                targets.add(on_other)
+            if next_target:
+                targets.add(next_target)
+            targets.add(node_id)
+            graph.add_conditional_edges(node_id, route_picker, {t: t for t in targets})
+            return True
+
         prompts = cfg.get("prompts")
         if not prompts:
             return False  # single field or dynamic_options — plain next edge
-
-        next_target = cfg.get("next")
-        node_id = cfg["id"]
 
         def route(state: ConversationState) -> str:
             collected = state.collected or {}
@@ -158,11 +187,40 @@ class CollectNode(NodeHandler):
                 placeholder = (
                     prompt_cfg.get("placeholder") if prompt_cfg else None
                 ) or dynamic_options.get("search", {}).get("placeholder", "Search…")
+                if not items:
+                    empty_msg = dynamic_options.get("empty_message", "No results found.")
+                    activities.append(Activity.markdown(empty_msg).model_dump(exclude_none=True))
+                    # Always stop — never render an empty picker regardless of on_empty.
+                    # When on_empty IS set, the conditional edge (registered at compile time)
+                    # routes to the empty-state node because field_key is None in collected.
+                    # When on_empty is NOT set, the static edge to next runs on the next user
+                    # turn — field is None, so downstream nodes should guard against that.
+                    return {
+                        "pending_activities": state.pending_activities + activities,
+                        "current_node": cfg["id"],
+                        "status": FlowStatus.ACTIVE,
+                        "collected": {**state.collected,
+                                      (field_cfg["name"].removeprefix("collected.") if field_cfg else "_empty"): None},
+                    }
+                other_opt_cfg = cfg.get("other_option")
+                other_option = None
+                if other_opt_cfg:
+                    other_option = QuickReply(
+                        id=other_opt_cfg["id"],
+                        label=other_opt_cfg["label"],
+                    )
+                show_status = cfg.get("show_status")
+                if show_status is None and dynamic_options:
+                    show_status = dynamic_options.get("show_status")
+                title = prompt_cfg.get("title") if prompt_cfg else None
                 activities.append(
                     Activity.picker(
                         picker_id=field_cfg["name"] if field_cfg else cfg["id"],
                         items=items,
                         placeholder=placeholder,
+                        other_option=other_option,
+                        title=title,
+                        show_status=show_status,
                     ).model_dump(exclude_none=True)
                 )
                 # Store per-item extras in collected so pick_item can merge them
@@ -236,6 +294,91 @@ async def _resolve_dynamic_options(
     from app.engine.template import render as _render, render_native
 
     source = cfg.get("source", "api")
+
+    if source == "context":
+        context_key = cfg.get("context_key", "").removeprefix("collected.")
+        items_raw = (ctx.get("collected") or {}).get(context_key, []) or []
+        mapping   = cfg.get("response_mapping", {})
+        id_field    = mapping.get("id_field", "id")
+        label_field = mapping.get("label_field", "name")
+        meta_field  = mapping.get("sub_label_field", "")
+        extra_fields_cfg = mapping.get("extra_fields", [])
+        filter_items: dict | None = cfg.get("filter_items")
+        
+        items: list[PickerItem] = []
+        extras_map: dict[str, dict] = {}
+        for raw in items_raw:
+            if not isinstance(raw, dict):
+                continue
+                
+            if filter_items:
+                fi_field = filter_items.get("field", "")
+                fi_op    = filter_items.get("operator", "gt")
+                fi_val   = filter_items.get("value", 0)
+                if isinstance(fi_val, str) and "{{" in fi_val:
+                    fi_val = _render(fi_val, ctx)
+                raw_val  = _item_get(raw, fi_field)
+                try:
+                    if raw_val is not None:
+                        raw_val = type(fi_val)(raw_val)
+                except (TypeError, ValueError):
+                    raw_val = None
+                include = False
+                if raw_val is not None:
+                    if fi_op == "gt":       include = raw_val > fi_val
+                    elif fi_op == "gte":    include = raw_val >= fi_val
+                    elif fi_op == "lt":     include = raw_val < fi_val
+                    elif fi_op == "lte":    include = raw_val <= fi_val
+                    elif fi_op == "eq":     include = raw_val == fi_val
+                    elif fi_op == "neq":    include = raw_val != fi_val
+                    elif fi_op == "not_null": include = True
+                elif fi_op == "is_null":   include = True
+                if not include:
+                    continue
+
+            item_id = raw.get(id_field)
+            label = raw.get(label_field)
+            meta = str(raw[meta_field]) if meta_field and isinstance(raw.get(meta_field), str) else None
+            progress = raw.get("progress") if isinstance(raw.get("progress"), dict) else None
+            extra = {}
+            for e_map in extra_fields_cfg:
+                from_k = e_map.get("from")
+                if from_k and from_k in raw:
+                    extra[from_k] = raw[from_k]
+                    
+            children_items = None
+            children_raw = raw.get("children")
+            if children_raw and isinstance(children_raw, list):
+                children_items = []
+                for c in children_raw:
+                    if not isinstance(c, dict):
+                        continue
+                    c_id = c.get(id_field)
+                    c_label = c.get(label_field)
+                    if c_id is None or c_label is None:
+                        continue
+                    c_meta = str(c[meta_field]) if meta_field and isinstance(c.get(meta_field), str) else None
+                    c_progress = c.get("progress") if isinstance(c.get("progress"), dict) else None
+                    c_extra = {}
+                    for e_map in extra_fields_cfg:
+                        from_k = e_map.get("from")
+                        if from_k and from_k in c:
+                            c_extra[from_k] = c[from_k]
+                    
+                    for ef in extra_fields_cfg:
+                        ef_from, ef_to = ef.get("from", ""), ef.get("to", "")
+                        if ef_from and ef_to and ef_from in c:
+                            extras_map.setdefault(str(c_id), {})[ef_to.removeprefix("collected.")] = c[ef_from]
+                    
+                    children_items.append(PickerItem(id=str(c_id), label=str(c_label), meta=c_meta, progress=c_progress, extra=c_extra, children=None))
+
+            items.append(PickerItem(id=str(item_id), label=str(label), meta=meta, progress=progress, extra=extra, children=children_items))
+            for ef in extra_fields_cfg:
+                ef_from, ef_to = ef.get("from", ""), ef.get("to", "")
+                if ef_from and ef_to and ef_from in raw:
+                    extras_map.setdefault(str(item_id), {})[ef_to.removeprefix("collected.")] = raw[ef_from]
+        return items, extras_map
+
     if source != "api":
         raise NotImplementedError(f"dynamic_options.source = {source!r} not supported yet")
 
@@ -262,6 +405,7 @@ async def _resolve_dynamic_options(
             url=rendered_url,
             params=rendered_params,
             body=rendered_body,
+            headers={k: _render(str(v), ctx) for k, v in request_cfg.get("headers", {}).items()} if "headers" in request_cfg else None,
         )
     except Exception:  # noqa: BLE001
         return [], {}  # network failure → empty picker (user can still type or try again)
@@ -306,9 +450,12 @@ async def _resolve_dynamic_options(
             fi_field = filter_items.get("field", "")
             fi_op    = filter_items.get("operator", "gt")
             fi_val   = filter_items.get("value", 0)
+            if isinstance(fi_val, str) and "{{" in fi_val:
+                fi_val = _render(fi_val, ctx)
             raw_val  = _item_get(raw, fi_field)
             try:
-                raw_val = type(fi_val)(raw_val)  # coerce to same type as threshold
+                if raw_val is not None:
+                    raw_val = type(fi_val)(raw_val)  # coerce to same type as threshold
             except (TypeError, ValueError):
                 raw_val = None
             include = False
@@ -346,7 +493,13 @@ async def _resolve_dynamic_options(
                     "[picker extras] item=%s  field=%s  raw=%r  stored=%r",
                     item_id, src_key, raw.get(src_key), value,
                 )
-                item_extras[dst_key] = value
+                # Only write when the resolved value is non-None.
+                # This allows multiple `from` sources to target the same `to`
+                # field (e.g. `batchId` at top-level AND `batches[0].batchId`
+                # as a fallback) without clobbering a previously-set valid
+                # value with None when the secondary source is absent.
+                if value is not None:
+                    item_extras[dst_key] = value
             extras_map[str(item_id)] = item_extras
 
     return items, extras_map
@@ -368,8 +521,12 @@ def _item_get(raw: dict[str, Any], path: str) -> Any:
 
     Supports both flat keys (e.g. 'courseId') and nested keys
     (e.g. 'event.name' → raw['event']['name']).
+    Returns the root object if path is '$'.
     Returns None if any level is missing.
     """
+    if path == "$":
+        return raw
+
     cur: Any = raw
     for part in path.split("."):
         if not isinstance(cur, dict):

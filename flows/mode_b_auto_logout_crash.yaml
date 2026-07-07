@@ -22,7 +22,8 @@ version: 1
 metadata:
   category:         platform
   menu_label:       "📱 Auto logout / App crash"
-  menu_group:       "Account & Login"
+  menu_group:       "Application Crashing / Not Loading"
+  menu_group_order: 5
   menu_order:       3
   classification:   Incident
   default_portal:   Learner Portal
@@ -78,7 +79,7 @@ nodes:
     type: resolution
     prompt:
       text: |
-        Kindly follow the below steps and check if the issue is resolved:
+        Please follow the steps below and check if the issue is resolved:
     steps:
       - "Long press the application icon."
       - "Click on **App Info**."
@@ -87,7 +88,7 @@ nodes:
       - "Click on **Clear Data / Clear Storage**."
       - "Relaunch the application and try again."
     follow_up:
-      text: "Has the issue been resolved after following the above steps?"
+      text: "Has the issue been resolved after following these steps?"
       quick_replies:
         - { id: yes, label: "✅ Yes, issue is resolved" }
         - { id: no,  label: "❌ No, issue still persists" }
@@ -99,7 +100,7 @@ nodes:
     type: collect
     prompt:
       text: |
-        Kindly share the following details:
+        Could you share the following details?
     prompts:
       - { field: collected.device_name,     text: "📱 Device Name:",     optional: false }
       - { field: collected.device_model,    text: "📋 Device Model:",    optional: false }
@@ -110,13 +111,30 @@ nodes:
     type: branch
     rules:
       - { if: "float(ctx.collected.android_version) < 8", then: android_unsupported_version }
-    default: android_raise_ticket
+    default: android_confirm_ticket
+
+  - id: android_confirm_ticket
+    type: ticket_confirm
+    prompt:
+      text: |
+        **Issue Identified:** Auto Logout / App Crash — Technical Issue
+
+        **Summary of Request:**
+        You reported that you are experiencing an auto logout or application crash issue on your Android device. You would like us to investigate this technical issue further.
+        
+        • **Device Name:** {{ ctx.collected.device_name }}
+        • **Device Model:** {{ ctx.collected.device_model }}
+        • **Android Version:** {{ ctx.collected.android_version }}
+
+        Please review the details above and confirm whether they are correct.
+    on_confirm: android_raise_ticket
+    on_cancel: satisfied
 
   - id: android_unsupported_version
     type: resolution
     prompt:
       text: |
-        Upon checking, your device does not meet the minimum Android version required to support the application.
+        We checked, and your device doesn't meet the minimum Android version required to support the application.
 
         Please update your device to **Android 8 or above** and try again.
     steps:
@@ -128,7 +146,7 @@ nodes:
 
   - id: android_raise_ticket
     type: transfer_llm
-    auto_raise: true
+    auto_raise: silent
     llm_context:
       include_messages:  true
       include_collected: true
@@ -141,12 +159,13 @@ nodes:
         Description: Include device details — Device Name: {{ ctx.collected.device_name }}, Device Model: {{ ctx.collected.device_model }}, Android Version: {{ ctx.collected.android_version }}. Note that the issue persisted after clearing the app cache and data.
       priority_override: P3
     on_complete: android_ticket_confirmed
+    on_restart: ask_device_type
 
   - id: android_ticket_confirmed
     type: message
     prompt:
       text: |
-        We understand that the issue persists even after clearing the application cache and data.
+        We understand the issue persists even after clearing the application cache and data.
 
         ✅ A support ticket has been raised and the details have been shared with the concerned team for further investigation.
     next: satisfied
@@ -158,7 +177,7 @@ nodes:
     type: collect
     prompt:
       text: |
-        Kindly share the following details:
+        Could you share the following details?
     prompts:
       - { field: collected.device_name,  text: "📱 Device Name:",                          optional: false }
       - { field: collected.device_model, text: "📋 Device Model:",                         optional: false }
@@ -169,15 +188,32 @@ nodes:
     type: branch
     rules:
       - { if: "float(ctx.collected.ios_version) < 15.6", then: ios_unsupported_version }
-    default: ios_raise_ticket
+    default: ios_confirm_ticket
+
+  - id: ios_confirm_ticket
+    type: ticket_confirm
+    prompt:
+      text: |
+        **Issue Identified:** Auto Logout / App Crash — Technical Issue
+
+        **Summary of Request:**
+        You reported that you are experiencing an auto logout or application crash issue on your iOS device. You would like us to investigate this technical issue further.
+        
+        • **Device Name:** {{ ctx.collected.device_name }}
+        • **Device Model:** {{ ctx.collected.device_model }}
+        • **iOS Version:** {{ ctx.collected.ios_version }}
+
+        Please review the details above and confirm whether they are correct.
+    on_confirm: ios_raise_ticket
+    on_cancel: satisfied
 
   - id: ios_unsupported_version
     type: resolution
     prompt:
       text: |
-        Upon checking, your device does not meet the minimum iOS version required to support the application.
+        We checked, and your device doesn't meet the minimum iOS version required to support the application.
 
-        The application supports **iOS 15.6 and above**. Kindly update your device and try again.
+        The application supports **iOS 15.6 and above** — please update your device and try again.
     steps:
       - "Go to your iPhone **Settings**."
       - "Tap **General** → **Software Update**."
@@ -187,7 +223,7 @@ nodes:
 
   - id: ios_raise_ticket
     type: transfer_llm
-    auto_raise: true
+    auto_raise: silent
     llm_context:
       include_messages:  true
       include_collected: true
@@ -200,12 +236,13 @@ nodes:
         Description: Include device details — Device Name: {{ ctx.collected.device_name }}, Device Model: {{ ctx.collected.device_model }}, iOS Version: {{ ctx.collected.ios_version }}.
       priority_override: P3
     on_complete: ios_ticket_confirmed
+    on_restart: ask_device_type
 
   - id: ios_ticket_confirmed
     type: message
     prompt:
       text: |
-        We understand that you are facing issues with the application.
+        We understand that you're facing issues with the application.
 
         ✅ A support ticket has been raised and the details have been shared with the concerned team for further investigation.
     next: satisfied
