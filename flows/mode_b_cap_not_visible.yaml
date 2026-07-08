@@ -157,7 +157,7 @@ nodes:
       text: |
         Once your profile is successfully verified, please check the Comprehensive Assessment Program (CAP) again.
 
-        Please feel free to reach out if you need any further assistance.
+        
     next: satisfied
 
   - id: branch_on_service_details
@@ -495,7 +495,7 @@ nodes:
 
         Please update the required details in your profile. Once updated, please wait approximately **4 hours** and then check whether the Comprehensive Assessment Program (CAP) is visible.
 
-        Please feel free to reach out if you need any further assistance.
+        
     next: satisfied
 
   - id: show_limited_details
@@ -581,7 +581,7 @@ nodes:
       text: |
         Once you've updated the required details, please check if the Comprehensive Assessment Program (CAP) is visible again after the profile changes are reflected.
 
-        Please feel free to reach out if you need any further assistance.
+        
     next: satisfied
 
 

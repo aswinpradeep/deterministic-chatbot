@@ -270,8 +270,7 @@ nodes:
 
   # SOP 6.1: Resolution for disabled button
   - id: guide_button_disabled
-    type: end
-    outcome: self_served
+    type: message
     prompt:
       text: |
         **"Make Transfer Request" Button is Disabled**
@@ -284,8 +283,7 @@ nodes:
         4. Click on **Withdraw Request** to cancel the pending request.
         5. Once withdrawn, the 'Make Transfer Request' option will become enabled again.
         6. Submit a fresh transfer request with the correct organization details.
-
-        I hope this helps. Please let me know if you need any further assistance.
+    next: satisfied
 
   # Ask user if they are under Central Ministry or State Government
   - id: ask_org_tier
@@ -690,9 +688,3 @@ nodes:
 
         Please try again after some time — thank you for your patience.
     next: satisfied
-
-  # Local override — this flow closes on its own resolution/steps text;
-  # no separate closing pleasantry needed.
-  - id: satisfied
-    type: end
-    outcome: self_served

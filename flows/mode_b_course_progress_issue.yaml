@@ -389,7 +389,7 @@ nodes:
     type: message
     prompt:
       text: |
-        Understood. Please feel free to reach out if you need any further assistance.
+        Understood. 
     next: satisfied
 
   # Collect email before raising ticket for technical issue
@@ -554,7 +554,7 @@ nodes:
 
         We're escalating this issue internally to the concerned team for further investigation.
 
-        Please feel free to reach out if you need any further assistance.
+        
     next: satisfied
 
   # ===========================================================================
@@ -994,7 +994,7 @@ nodes:
 
         The issue has been shared with the concerned team for further investigation.
 
-        We apologise for the inconvenience. Please feel free to reach out if you need any further assistance.
+        We apologise for the inconvenience. 
     next: satisfied
 
   # ===========================================================================
@@ -1082,7 +1082,7 @@ nodes:
 
         Once all mandatory resources are completed successfully, the certificate will be generated.
 
-        Please feel free to reach out if you need any further assistance.
+        
     next: satisfied
 
   - id: progress_pending_end
