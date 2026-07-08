@@ -455,8 +455,7 @@ nodes:
 
   # Step 2 - Name is Correct
   - id: c3_name_correct
-    type: end
-    outcome: self_served
+    type: message
     prompt:
       text: |
         Since your profile name is correct, please re-download the certificate by following the steps below.
@@ -468,6 +467,7 @@ nodes:
         4. Locate the required certificate.
         5. Click on **Download Certificate**.
         6. Verify whether the downloaded certificate displays the correct name.
+    next: satisfied
 
   # Step 3 - Name is Incorrect
   - id: c3_name_incorrect
@@ -493,8 +493,7 @@ nodes:
 
   # Step 3.2 - Confirms Yes
   - id: c3_guide_update_profile
-    type: end
-    outcome: self_served
+    type: message
     prompt:
       text: |
         Please follow the below steps to update your profile name:
@@ -511,18 +510,17 @@ nodes:
         3. Locate the required certificate.
         4. Click on **Download Certificate**.
         5. Verify whether the updated name is reflected in the downloaded certificate.
+    next: satisfied
 
   # Step 3.3 - Confirms No
   - id: c3_no_update
-    type: end
-    outcome: self_served
+    type: message
     prompt:
       text: |
         No problem.
 
         If you decide to update your profile name in the future, you can follow the above steps and re-download the certificate.
-
-        Please feel free to reach out if you need any further assistance.
+    next: satisfied
 
   # ===========================================================================
   # Generic resolution (catch-all for unexpected paths)
