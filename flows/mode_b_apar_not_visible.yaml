@@ -8,7 +8,7 @@
 #   - Fetch CBP training plan via CBP Plan API
 #   - If plan exists: show APAR / Non-APAR summary table + navigation steps
 #   - Allow user to request full course list (APAR or Non-APAR)
-#   - If no plan found: escalate
+#   - If no plan found: check org mapping / profile verification, then MDO/YP contact fallback (no ticket)
 #
 # Integration: karmayogi  (Authorization: Bearer KARMAYOGI_API_KEY)
 #
@@ -55,11 +55,6 @@ imports:
   - _terminal
   - fragment: _mdo_admin_lookup
   - fragment: _yp_lookup
-  - fragment: _zoho_ticket
-    with:
-      cf_category:     course
-      cf_sub_category: apar_not_visible
-      cf_flow_id:      APAR_NOT_VISIBLE
 
 nodes:
 
@@ -319,7 +314,7 @@ nodes:
       - { from: "$.response.profileDetails.centralDeputation",               to: collected.central_deputation }
     on_success: branch_on_org_mapping
     on_error:
-      any: offer_ticket_no_plan
+      any: org_details_unavailable
     timeout_ms: 5000
 
   # ===========================================================================
@@ -670,60 +665,13 @@ nodes:
   # ===========================================================================
   # Reached only when validate_user_org API itself errors out
   # ===========================================================================
-  - id: offer_ticket_no_plan
+  - id: org_details_unavailable
     type: message
     prompt:
       text: |
-        We checked, and couldn't find an active training plan assigned to your profile.
+        We couldn't verify your organization / MDO details at this time.
 
-        This could mean:
-        - A training plan has not yet been assigned by your MDO, or
-        - There may be a sync delay — please check again after some time.
-
-        Would you like us to raise a support ticket for further investigation?
-    quick_replies:
-      - { id: yes, label: "✅ Yes, please raise a ticket" }
-      - { id: no,  label: "❌ No, thank you" }
-    disable_input: true
-    on_reply:
-      yes: apar_confirm_ticket
-      no:  satisfied
-
-  - id: apar_confirm_ticket
-    type: ticket_confirm
-    prompt:
-      text: |
-        **Issue Identified:** APAR Training Plan Not Visible
-
-        **Summary of Request:**
-        You reported that your APAR training plan / courses are not visible on the platform. You would like us to investigate this issue further.
-
-        Please review the details above and confirm whether they are correct.
-    on_confirm: raise_ticket
-    on_cancel: satisfied
-
-  - id: raise_ticket
-    type: transfer_llm
-    auto_raise: silent
-    llm_context:
-      include_messages:  true
-      include_collected: true
-      include_flow_meta: true
-    llm_directives:
-      objective: |
-        The user reports that their APAR training plan / courses are not visible on the iGOT platform.
-        Generate a support ticket.
-        Subject: "Training Plan / APAR Courses Not Visible"
-        Description: The CBP plan API returned no data for this user. Include user email ({{ ctx.collected.user_email }}) and rootOrgId ({{ ctx.collected.root_org_id }}).
-      priority_override: P3
-    on_complete: ticket_confirmed
-    on_restart: fetch_user_profile
-
-  - id: ticket_confirmed
-    type: message
-    prompt:
-      text: |
-        ✅ A support ticket has been raised and the details have been shared with the concerned team for further investigation.
+        Please reach out to your MDO Admin or concerned authority for further assistance regarding your training plan.
     next: satisfied
 
   # ===========================================================================

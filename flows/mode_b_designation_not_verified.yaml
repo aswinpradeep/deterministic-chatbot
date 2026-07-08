@@ -105,7 +105,7 @@ nodes:
         I couldn't retrieve your profile details at this time.
 
         Please try again in a few minutes.
-    next: resolution_check
+    next: satisfied
 
   # ===========================================================================
   # SOP §1.1 / §1.2 — Gate: is the profile already verified?
@@ -135,7 +135,7 @@ nodes:
         A green tick mark should be visible next to your name.
 
         The green tick indicates that the profile is already verified.
-    next: resolution_check
+    next: satisfied
 
   # ===========================================================================
   # Branch — does a pending transfer/designation request exist?
@@ -204,7 +204,7 @@ nodes:
         Please contact the below admin for further assistance: 
         Admin Name: {{ ctx.collected.mdo_leader_name or ctx.collected.mdo_leader_name_fallback }}
         Admin Email ID: {{ ctx.collected.mdo_leader_email or ctx.collected.mdo_leader_email_fallback }}
-    next: resolution_check
+    next: satisfied
 
   # ---------------------------------------------------------------------------
   # §1.1.2 — No Org Admin → Global Rule: YP lookup from Excel
@@ -223,7 +223,7 @@ nodes:
         Please connect with the concerned YP for further assistance.
         YP Name: {{ ctx.collected.yp_name }}
         YP Email ID: {{ ctx.collected.yp_email }}
-    next: resolution_check
+    next: satisfied
 
   - id: yp_not_found
     type: message
@@ -232,7 +232,7 @@ nodes:
         Your designation request has already been submitted. However, there is currently no Organization Admin available to approve the request. 
         
         Please connect with the concerned YP for further assistance.
-    next: resolution_check
+    next: satisfied
 
   # ===========================================================================
   # §1.2 — No pending request — guide user through submission steps
@@ -257,7 +257,7 @@ nodes:
     on_reply:
       save_to: collected.submission_attempt
       yes: ask_is_designation_visible
-      no:  resolution_check
+      no:  satisfied
 
   # ===========================================================================
   # §1.3 — User submitted but designation still not visible
@@ -357,7 +357,7 @@ nodes:
         Admin Name: {{ ctx.collected.mdo_leader_name or ctx.collected.mdo_leader_name_fallback }}
         Admin Email ID: {{ ctx.collected.mdo_leader_email or ctx.collected.mdo_leader_email_fallback }}
         The designation will reflect in your profile after approval.
-    next: resolution_check
+    next: satisfied
 
   # ===========================================================================
   # §1.3.2 / §1.4.2 — No pending request after recheck → guide steps again
@@ -381,30 +381,5 @@ nodes:
         - { id: yes, label: "✅ Yes, re-submitted" }
         - { id: no,  label: "❌ No, still having trouble" }
     on_reply:
-      yes: resolution_check
-      no:  resolution_check
-
-  # ===========================================================================
-  # Resolution check
-  # ===========================================================================
-
-  - id: resolution_check
-    type: message
-    prompt:
-      text: "Did this help resolve your designation / group verification issue?"
-    quick_replies:
-      - { id: yes, label: "✅ Yes, resolved" }
-      - { id: no,  label: "❌ No, need more help" }
-    disable_input: true
-    on_reply:
       yes: satisfied
-      no:  unresolved_end
-
-  - id: unresolved_end
-    type: end
-    outcome: unresolved
-    prompt:
-      text: |
-        I'm sorry I couldn't fully resolve this for you.
-
-        Please try again after some time. Thank you for your patience.
+      no:  satisfied
