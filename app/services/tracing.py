@@ -346,7 +346,7 @@ def record_session_end(
 # ── LLM generation span ────────────────────────────────────────────────────────
 
 @contextmanager
-def generation_span(*, model: str, operation: str, prompt_len: int = 0):
+def generation_span(*, model: str, operation: str, prompt_len: int = 0, span_input: Any = None):
     """Context manager: record one LLM call as a Langfuse generation child span.
 
     Must be called INSIDE a turn_trace block so Langfuse nests it under the
@@ -354,26 +354,24 @@ def generation_span(*, model: str, operation: str, prompt_len: int = 0):
     Prompt text is NOT logged (PII) — only the character length.
     Call update_current_generation() inside the block to set the output.
 
+    span_input: structured dict shown in Langfuse Input tab — pass system prompt
+                text + non-PII context (char counts, field names, etc.).
+                Defaults to {operation, prompt_chars} if not provided.
+
     No-op when tracing is disabled.
-
-    Example::
-
-        with tracing.generation_span(model="gemini-2.5-flash",
-                                     operation="ticket_summary",
-                                     prompt_len=len(prompt)):
-            raw = await self._call(prompt)
-            tracing.update_current_generation(output=raw[:500])
     """
     if not _enabled or _client is None:
         yield
         return
 
     _user_code_started = False
+    _input = span_input if span_input is not None else {"operation": operation, "prompt_chars": prompt_len}
     try:
         with _client.start_as_current_observation(
             name=f"llm-{operation}",
             as_type="generation",
             model=model,
+            input=_input,
             metadata={"operation": operation, "prompt_chars": prompt_len},
         ):
             _user_code_started = True
@@ -387,13 +385,14 @@ def generation_span(*, model: str, operation: str, prompt_len: int = 0):
 
 def update_current_generation(
     *,
-    output: str | None = None,
+    output: Any = None,
     usage_input: int | None = None,
     usage_output: int | None = None,
 ) -> None:
-    """Update the active LLM generation span with output text and token counts.
+    """Update the active LLM generation span with output and token counts.
 
-    output:        First N chars of the LLM response (caller trims for size).
+    output:        LLM response — pass a parsed dict/list for structured JSON rendering
+                   in Langfuse, or a truncated string as fallback.
     usage_input:   Input token count (from SDK response if available).
     usage_output:  Output token count.
     No-op when tracing is disabled.

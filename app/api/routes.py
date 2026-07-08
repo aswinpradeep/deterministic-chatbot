@@ -456,10 +456,14 @@ async def submit_turn(
                 tracing.set_span_io(input={"user": f"Selected topic: {_topic_label}"})
                 result = await graph.ainvoke(state_dict, lg_config)
                 result_status = result.get("status", "active")
-                _bot_reply = _first_bot_text(result.get("pending_activities") or [])
+                _pending = result.get("pending_activities") or []
                 tracing.set_span_io(
                     input={"user": f"Selected topic: {_topic_label}"},
-                    output={"bot": _bot_reply, "next_node": result.get("current_node"), "status": str(result_status)},
+                    output={
+                        "activities": _activities_for_trace(_pending),
+                        "next_node": result.get("current_node"),
+                        "status": str(result_status),
+                    },
                 )
         except Exception as exc:  # noqa: BLE001
             log.exception("Flow start error for %s", flow_id)
@@ -644,9 +648,9 @@ async def submit_turn(
             await graph.aupdate_state(lg_config, update)
             result = await graph.ainvoke(None, lg_config)
             result_status = result.get("status", "active")
-            _bot_reply = _first_bot_text(result.get("pending_activities") or [])
+            _pending = result.get("pending_activities") or []
             _out: dict = {
-                "bot": _bot_reply,
+                "activities": _activities_for_trace(_pending),
                 "next_node": result.get("current_node"),
                 "status": str(result_status),
             }
@@ -884,6 +888,48 @@ def _first_bot_text(activities: list[dict]) -> str:
         if isinstance(text, str) and text.strip():
             return text.strip()[:200]
     return f"[{len(activities)} activities]"
+
+
+def _activities_for_trace(activities: list[dict]) -> list[dict]:
+    """Build a structured, non-PII summary of all bot activities for Langfuse.
+
+    Each activity becomes a compact dict showing type + key display fields so
+    the Langfuse Output tab reads like a step-by-step trace of what the bot
+    presented to the user.
+    """
+    summary = []
+    for act in activities:
+        atype = act.get("type", "unknown")
+        if atype in ("text", "markdown"):
+            summary.append({"type": atype, "content": (act.get("content") or "")[:400]})
+        elif atype == "quick_replies":
+            summary.append({
+                "type": "quick_replies",
+                "options": [c.get("label") for c in (act.get("choices") or [])],
+            })
+        elif atype in ("picker", "nested_picker"):
+            summary.append({
+                "type": atype,
+                "placeholder": act.get("placeholder"),
+                "title": act.get("title"),
+                "total_items": act.get("total_items"),
+            })
+        elif atype == "input":
+            summary.append({
+                "type": "input",
+                "field": act.get("input_id"),
+                "placeholder": act.get("input_placeholder"),
+            })
+        elif atype == "action_button":
+            summary.append({
+                "type": "action_button",
+                "label": act.get("label"),
+            })
+        elif atype == "end":
+            summary.append({"type": "end", "outcome": act.get("outcome")})
+        else:
+            summary.append({"type": atype})
+    return summary
 
 
 def _user_input_label(
