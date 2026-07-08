@@ -53,7 +53,6 @@ imports:
 
 nodes:
 
-
   # ===========================================================================
   # 2. Verify Transfer Request Status (SOP Step 2.1: Private User Search API)
   # ===========================================================================
@@ -256,28 +255,37 @@ nodes:
         - { id: greyed, label: "Button is disabled" }
         - { id: no_org, label: "🔍 Can't find my organisation" }
     on_reply:
-      done: satisfied
+      done: guide_raise_transfer_done
       # SOP Step 6.1: Transfer Request Button Disabled
       greyed: guide_button_disabled
       # SOP Step 6.2: User Unable to Find Organization in Dropdown
       no_org: ask_org_tier
-      
+
+  - id: guide_raise_transfer_done
+    type: end
+    outcome: self_served
+    prompt:
+      text: |
+        I hope this helps. Please let me know if you need any further assistance.
+
   # SOP 6.1: Resolution for disabled button
   - id: guide_button_disabled
-    type: resolution
+    type: end
+    outcome: self_served
     prompt:
       text: |
         **"Make Transfer Request" Button is Disabled**
 
         This is usually because you have a pending request under your **Primary Details** section.
-    steps:
-      - "Log in to iGOT Karmayogi."
-      - "Go to **Profile** (Top Right Corner)."
-      - "Open the **Primary Details** section."
-      - "Click on **Withdraw Request** to cancel the pending request."
-      - "Once withdrawn, the 'Make Transfer Request' option will become enabled again."
-      - "Submit a fresh transfer request with the correct organization details."
-    next: satisfied
+
+        1. Log in to iGOT Karmayogi.
+        2. Go to **Profile** (Top Right Corner).
+        3. Open the **Primary Details** section.
+        4. Click on **Withdraw Request** to cancel the pending request.
+        5. Once withdrawn, the 'Make Transfer Request' option will become enabled again.
+        6. Submit a fresh transfer request with the correct organization details.
+
+        I hope this helps. Please let me know if you need any further assistance.
 
   # Ask user if they are under Central Ministry or State Government
   - id: ask_org_tier
@@ -683,11 +691,8 @@ nodes:
         Please try again after some time — thank you for your patience.
     next: satisfied
 
-
-
+  # Local override — this flow closes on its own resolution/steps text;
+  # no separate closing pleasantry needed.
   - id: satisfied
     type: end
     outcome: self_served
-    prompt:
-      text: |
-        Glad I could help.
