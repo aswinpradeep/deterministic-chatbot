@@ -92,8 +92,7 @@ nodes:
   # SECTION 2 — Shiksha Path (static guidance, no API)
   # ===========================================================================
   - id: shiksha_path_info
-    type: end
-    outcome: self_served
+    type: message
     prompt:
       text: |
         **Shiksha Path** is managed by the **Directorate of Training, CBDT**.
@@ -104,8 +103,7 @@ nodes:
 
         **Support Contact**
         **Email ID:** aed4.training@incometax.gov.in
-
-        We hope your concern gets resolved soon. Thank you for reaching out! 🙏
+    next: satisfied
 
   # ===========================================================================
   # SECTION 1 — eHRMS
@@ -203,13 +201,13 @@ nodes:
     next: ehrms_support_referral_end
 
   - id: ehrms_support_referral_end
-    type: end
-    outcome: self_served
+    type: message
     prompt:
       text: |
         Thank you for sharing the details.
 
         Please contact the **eHRMS support team** with the above information for further assistance. They will investigate why the learning progress is not reflecting in your eHRMS account.
+    next: satisfied
 
   # ===========================================================================
   # MDO lookup — injected from _shared/_mdo_admin_lookup.yaml
@@ -595,15 +593,13 @@ nodes:
 
   # Step 4.5.1 — CAP assessment not passed
   - id: sp_cap_guidance
-    type: end
-    outcome: self_served
+    type: message
     prompt:
       text: |
         We checked, and found that your APAR courses have been assigned; however, the **CAP assessment** has not yet been passed.
 
         Please reattempt and pass the **CAP assessment**. Reflection in SPARROW/APAR occurs only after successful completion of the required courses and assessment.
-
-        Thank you for reaching out! 🙏
+    next: satisfied
 
   # Step 4.5.2 / 4.5.3 — Completion found: ask if 24 hours have passed
   - id: sp_ask_time_elapsed
@@ -623,13 +619,13 @@ nodes:
 
   # Step 4.5.2 — Within 24 hours
   - id: sp_data_reflecting
-    type: end
-    outcome: self_served
+    type: message
     prompt:
       text: |
         It may take up to **24 hours** for the completion data to reflect in SPARROW.
 
-        Please check again after 24 hours. Thank you for your patience! 🙏
+        Please check again after 24 hours.
+    next: satisfied
 
   # Step 4.5.3 — More than 24 hours: check email match
   - id: sp_check_email_match
@@ -647,20 +643,19 @@ nodes:
 
   # Step 4.5.3 — Email IDs match → SPARROW support
   - id: sp_email_match_info
-    type: end
-    outcome: self_served
+    type: message
     prompt:
       text: |
         Since both email IDs are the same and the data is still not reflecting after 24 hours, please contact the **SPARROW support team** directly:
 
         **SPARROW Support Email:** support-sparrow@gov.in
 
-        Please share your iGOT user ID and course details with them for further investigation. Thank you! 🙏
+        Please share your iGOT user ID and course details with them for further investigation.
+    next: satisfied
 
   # Step 4.5.3 — Email IDs do not match → reference video
   - id: sp_email_no_match_info
-    type: end
-    outcome: self_served
+    type: message
     prompt:
       text: |
         Since the email IDs are different, the iGOT training data may not be automatically linked to your SPARROW account.
@@ -669,6 +664,7 @@ nodes:
     action_button:
       label: "📹 How to Fetch iGOT Training Data into SPARROW APAR"
       url: "https://tarento-my.sharepoint.com/personal/soniya_chugh_tarento_com/_layouts/15/stream.aspx?id=%2Fpersonal%2Fsoniya%5Fchugh%5Ftarento%5Fcom%2FDocuments%2FMicrosoft%20Teams%20Chat%20Files%2FHow%20to%20Fetch%20iGOT%20Training%20Data%20into%20SPARROW%20APAR%5FV8%201%2Emp4&referrer=StreamWebApp%2EWeb&referrerScenario=AddressBarCopied%2Eview%2E4cd905b0%2Da0b7%2D40cc%2Dbc5b%2D7818d1639509&ga=1"
+    next: satisfied
 
   # Step 4.3 — APAR/CAP not assigned + MDO found → show MDO details
   - id: sp_no_apar_mdo_found
@@ -731,8 +727,7 @@ nodes:
 
   # Step 6.2 — Missing AIS details
   - id: sp_missing_service_details
-    type: end
-    outcome: self_served
+    type: message
     prompt:
       text: |
         We found that some mandatory service-related details are either missing or incomplete in your profile:
@@ -743,8 +738,7 @@ nodes:
         - Central Deputation Details
 
         Please update the required details in your profile. Once updated, the APAR plans should reflect in your account within approximately **2–3 hours**.
-
-        Thank you for reaching out! 🙏
+    next: satisfied
 
   # Step 6.3 — Not AIS: guide profile verification
   - id: sp_guide_profile_verification
@@ -762,13 +756,13 @@ nodes:
     next: sp_guide_profile_verification_closure
 
   - id: sp_guide_profile_verification_closure
-    type: end
-    outcome: self_served
+    type: message
     prompt:
       text: |
         Once the profile is successfully verified, the APAR courses and training plans may reflect in your account.
 
-        Please recheck the APAR section after the profile verification is complete. Thank you! 🙏
+        Please recheck the APAR section after the profile verification is complete.
+    next: satisfied
 
   # Generic API error for SPARROW path
   - id: sp_api_error

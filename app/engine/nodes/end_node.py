@@ -51,7 +51,8 @@ class EndNode(NodeHandler):
                 text = render(prompt.get("text", ""), ctx)
                 if text:
                     if merge_target and merge_target.get("type") == "markdown":
-                        merge_target["content"] = f"{merge_target.get('content', '')}\n\n{text}"
+                        prior_text = merge_target.get("content", "").rstrip()
+                        merge_target["content"] = f"{prior_text}\n\n{text}"
                     else:
                         activities.append(
                             Activity.markdown(text).model_dump(exclude_none=True)

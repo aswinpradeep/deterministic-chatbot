@@ -106,12 +106,7 @@ nodes:
 
         We appreciate your interest in learning through the platform. Please wait until the next enrollment cycle is announced — you'll be notified as soon as it opens.
     steps: []
-    follow_up:
-      text: "Is there anything else I can help you with?"
-      quick_replies:
-        - { id: done, label: "✅ No, thank you" }
-    on_reply:
-      done: satisfied
+    next: satisfied
 
   # ===========================================================================
   # STEP 3 — Identify whether the user is looking for a course or event
@@ -299,12 +294,7 @@ nodes:
     action_button:
       label: "🔗 Open Course"
       url: "{{ env.KARMAYOGI_PORTAL_BASE_URL }}/app/toc/{{ ctx.collected.course_id }}/overview"
-    follow_up:
-      text: "Is there anything else I can help you with?"
-      quick_replies:
-        - { id: done, label: "✅ No, thank you" }
-    on_reply:
-      done: satisfied
+    next: satisfied
 
   # ===========================================================================
   # STEP 13 — User is NOT eligible for the moderated course
@@ -435,14 +425,7 @@ nodes:
       text: |
         We checked, and the course **{{ ctx.collected.course_name_found }}** has been retired and is no longer available for enrollment on the platform.
     steps: []
-    follow_up:
-      text: "Is there anything else I can help you with?"
-      quick_replies:
-        - { id: retry, label: "🔍 Search for another course" }
-        - { id: done,  label: "✅ No, thank you" }
-    on_reply:
-      retry: ask_course_name
-      done:  satisfied
+    next: satisfied
 
   # ===========================================================================
   # STEP 9 — Course is DRAFT / UNDER REVIEW / other non-Live status
@@ -455,14 +438,7 @@ nodes:
 
         As a result, it's temporarily unavailable for enrollment.
     steps: []
-    follow_up:
-      text: "Is there anything else I can help you with?"
-      quick_replies:
-        - { id: retry, label: "🔍 Search for another course" }
-        - { id: done,  label: "✅ No, thank you" }
-    on_reply:
-      retry: ask_course_name
-      done:  satisfied
+    next: satisfied
 
   # ===========================================================================
   # STEP 5 — Course not found → retry loop (no ticket)
@@ -512,12 +488,7 @@ nodes:
         👤 **Name:** {{ ctx.collected.mdo_admin_name }}
         📧 **Email ID:** {{ ctx.collected.mdo_admin_email }}
     steps: []
-    follow_up:
-      text: "Is there anything else I can help you with?"
-      quick_replies:
-        - { id: done, label: "✅ No, thank you" }
-    on_reply:
-      done: satisfied
+    next: satisfied
 
   - id: mdo_api_error
     type: branch
@@ -545,12 +516,7 @@ nodes:
         📧 **Email ID:** {{ ctx.collected.yp_email }}
         📞 **Mobile:** {{ ctx.collected.yp_mobile }}
     steps: []
-    follow_up:
-      text: "Is there anything else I can help you with?"
-      quick_replies:
-        - { id: done, label: "✅ No, thank you" }
-    on_reply:
-      done: satisfied
+    next: satisfied
 
   # MDO not found AND YP not found
   - id: yp_not_found
@@ -561,12 +527,7 @@ nodes:
 
         Please reach out to your concerned MDO or YP for further assistance with course eligibility and access.
     steps: []
-    follow_up:
-      text: "Is there anything else I can help you with?"
-      quick_replies:
-        - { id: done, label: "✅ No, thank you" }
-    on_reply:
-      done: satisfied
+    next: satisfied
 
   # Search API error
   - id: search_api_error
@@ -702,14 +663,7 @@ nodes:
       text: |
         The event **{{ ctx.collected.event_name_found }}** has been retired and is no longer available on the platform.
     steps: []
-    follow_up:
-      text: "Is there anything else I can help you with?"
-      quick_replies:
-        - { id: retry, label: "🔍 Search for another event" }
-        - { id: done,  label: "✅ No, thank you" }
-    on_reply:
-      retry: ask_event_name
-      done:  satisfied
+    next: satisfied
 
   # Event not Live (DRAFT / REVIEW / other)
   - id: show_event_unavailable
@@ -720,14 +674,7 @@ nodes:
 
         It may be upcoming or being updated — please check back later.
     steps: []
-    follow_up:
-      text: "Is there anything else I can help you with?"
-      quick_replies:
-        - { id: retry, label: "🔍 Search for another event" }
-        - { id: done,  label: "✅ No, thank you" }
-    on_reply:
-      retry: ask_event_name
-      done:  satisfied
+    next: satisfied
 
   # STEP 16.1 — Event not found → retry loop (no ticket)
   - id: event_not_found

@@ -54,7 +54,3 @@ nodes:
 
         Once you have completed the course, you may revisit after 4–5 hours, navigate to My Learning, select the course, complete the survey/feedback, and download your certificate.
     next: satisfied
-
-  - id: satisfied
-    type: end
-    outcome: self_served
