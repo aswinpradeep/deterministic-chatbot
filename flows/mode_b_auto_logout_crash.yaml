@@ -158,17 +158,8 @@ nodes:
         Subject: "Auto Logout / App Crash – Android"
         Description: Include device details — Device Name: {{ ctx.collected.device_name }}, Device Model: {{ ctx.collected.device_model }}, Android Version: {{ ctx.collected.android_version }}. Note that the issue persisted after clearing the app cache and data.
       priority_override: P3
-    on_complete: android_ticket_confirmed
+    on_complete: confirm_ticket
     on_restart: ask_device_type
-
-  - id: android_ticket_confirmed
-    type: message
-    prompt:
-      text: |
-        We understand the issue persists even after clearing the application cache and data.
-
-        ✅ A support ticket has been raised and the details have been shared with the concerned team for further investigation.
-    next: satisfied
 
   # ===========================================================================
   # 3. iOS Path
@@ -235,14 +226,5 @@ nodes:
         Subject: "Auto Logout / App Crash – iOS"
         Description: Include device details — Device Name: {{ ctx.collected.device_name }}, Device Model: {{ ctx.collected.device_model }}, iOS Version: {{ ctx.collected.ios_version }}.
       priority_override: P3
-    on_complete: ios_ticket_confirmed
+    on_complete: confirm_ticket
     on_restart: ask_device_type
-
-  - id: ios_ticket_confirmed
-    type: message
-    prompt:
-      text: |
-        We understand that you're facing issues with the application.
-
-        ✅ A support ticket has been raised and the details have been shared with the concerned team for further investigation.
-    next: satisfied
