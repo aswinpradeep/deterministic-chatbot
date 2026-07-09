@@ -519,7 +519,20 @@ nodes:
       text: |
         No problem.
 
-        If you decide to update your profile name in the future, you can follow the above steps and re-download the certificate.
+        If you decide to update your profile name in the future, you can follow the steps below and re-download the certificate.
+
+        1. Log in to your iGOT Karmayogi account.
+        2. Go to **Profile**.
+        3. Click on **Edit Profile**.
+        4. Update the **Name** field with the correct details.
+        5. Save the changes.
+
+        Once the profile has been updated successfully:
+        1. Go to **Profile**.
+        2. Open the **Certificates** section.
+        3. Locate the required certificate.
+        4. Click on **Download Certificate**.
+        5. Verify whether the updated name is reflected in the downloaded certificate.
     next: satisfied
 
   # ===========================================================================
