@@ -149,6 +149,10 @@ nodes:
       search:     { enabled: true, placeholder: "Search your completed courses..." }
       pagination: { enabled: true, page_size: 10 }
       cache_ttl:  300
+      empty_message: |
+        You do not have any completed courses at the moment.
+
+        Karma points are credited only after a course is fully completed. Please complete a course on the iGOT Karmayogi portal and try again.
       on_empty:   no_completed_courses_found
     next: kc_fetch_karma_by_id
 
@@ -431,6 +435,10 @@ nodes:
       search:     { enabled: true, placeholder: "Search your completed courses..." }
       pagination: { enabled: true, page_size: 10 }
       cache_ttl:  300
+      empty_message: |
+        You do not have any completed courses at the moment.
+
+        Karma points are credited only after a course is fully completed. Please complete a course on the iGOT Karmayogi portal and try again.
       on_empty:   no_completed_courses_found
     next: ec1_fetch_karma
 

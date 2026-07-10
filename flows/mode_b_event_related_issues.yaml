@@ -96,6 +96,10 @@ nodes:
       search:     { enabled: true, placeholder: "Search your enrolled events..." }
       pagination: { enabled: true, page_size: 10 }
       cache_ttl:  300
+      empty_message: |
+        You do not have any enrolled events at the moment.
+
+        Please enrol in an event on the iGOT Karmayogi portal and try again.
       on_empty:   no_events_found
     next: api_read_event_uc1
 
@@ -122,6 +126,10 @@ nodes:
       search:     { enabled: true, placeholder: "Search your enrolled events..." }
       pagination: { enabled: true, page_size: 10 }
       cache_ttl:  300
+      empty_message: |
+        You do not have any enrolled events at the moment.
+
+        Please enrol in an event on the iGOT Karmayogi portal and try again.
       on_empty:   no_events_found
     next: api_read_event_uc2
 
@@ -149,6 +157,10 @@ nodes:
       search:     { enabled: true, placeholder: "Search your enrolled events..." }
       pagination: { enabled: true, page_size: 10 }
       cache_ttl:  300
+      empty_message: |
+        You do not have any enrolled events at the moment.
+
+        Please enrol in an event on the iGOT Karmayogi portal and try again.
       on_empty:   no_events_found
     next: branch_uc3_progress
 
@@ -177,6 +189,10 @@ nodes:
       search:     { enabled: true, placeholder: "Search your enrolled events..." }
       pagination: { enabled: true, page_size: 10 }
       cache_ttl:  300
+      empty_message: |
+        You do not have any enrolled events at the moment.
+
+        Please enrol in an event on the iGOT Karmayogi portal and try again.
       on_empty:   no_events_found
     next: branch_uc4_certificate
 

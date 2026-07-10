@@ -67,6 +67,7 @@ imports:
       field_prefix:  "c1_"
       next:          c1_read_course_content
       on_empty:      no_courses_found_cert
+      empty_message: 'You do not have any enrolled courses or programs with In-Progress or Completed status.\n\nPlease enrol in a course on the iGOT Karmayogi portal and try again.'
 
 nodes:
 
