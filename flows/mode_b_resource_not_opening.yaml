@@ -155,6 +155,10 @@ nodes:
       search:     { enabled: true, placeholder: "Search your enrolled courses..." }
       pagination: { enabled: true, page_size: 10 }
       cache_ttl:  300
+      empty_message: |
+        You do not have any enrolled courses or programs at the moment.
+
+        Please enrol in a course on the iGOT Karmayogi portal and try again.
       on_empty:   no_enrolled_courses_found
     next: api_fetch_hierarchy
  

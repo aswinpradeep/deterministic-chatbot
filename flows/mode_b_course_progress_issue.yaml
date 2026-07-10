@@ -125,6 +125,10 @@ nodes:
       search:     { enabled: true, placeholder: "Search your enrolled courses and programs..." }
       pagination: { enabled: true, page_size: 10 }
       cache_ttl:  300
+      empty_message: |
+        You do not have any enrolled courses or programs with In-Progress or Completed status.
+
+        Please enrol in a course on the iGOT Karmayogi portal and try again.
       on_empty:   no_courses_found
     # Skip api_enrollment_check — all required fields are already captured above.
     # api_enrollment_check used $.result.enrollments[0] which is the wrong response
