@@ -77,7 +77,8 @@ curl -X POST \
 |---|---|
 | `user_found_count == 0` | User not found; show support email; no further API calls |
 | `wf_transfer_id` is present and non-empty | `matched = true`; proceed to Step 2 (Path A) |
-| `wf_transfer_id` is absent or empty | No transfer request raised; guide user to raise one (Path B) |
+| `wf_transfer_id` is absent/empty AND `profile_status.upper() == "VERIFIED"` | User's profile is still verified with their org — not actually revoked; show "access is active" message instead of transfer guidance |
+| `wf_transfer_id` is absent/empty AND `profile_status` is not `"VERIFIED"` | No transfer request raised; guide user to raise one (Path B) |
 
 ---
 
