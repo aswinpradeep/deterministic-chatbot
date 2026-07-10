@@ -137,7 +137,7 @@ class FlowCompiler:
                 raw_text = raw_text.replace(f"{{{{ params.{key} }}}}", str(val))
                 raw_text = re.sub(
                     rf'\{{\{{\s*params\.{re.escape(key)}\s*\|\s*default\([^)]*\)\s*\}}\}}',
-                    str(val),
+                    lambda m, v=val: str(v),
                     raw_text,
                 )
             # Replace any remaining {{ params.KEY | default("fallback") }} whose key

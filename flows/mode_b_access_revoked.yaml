@@ -98,8 +98,22 @@ nodes:
       # SOP Step 2.2: If Transfer Request is Already Raised
       - { if: "ctx.collected.wf_transfer_id != None and ctx.collected.wf_transfer_id != ''",
           then: fetch_org_details }
+      # Profile is currently VERIFIED with an org — user is not actually flagged as "Not My User"
+      - { if: "(ctx.collected.profile_status or '').upper() == 'VERIFIED'",
+          then: user_not_revoked }
     # SOP Step 4: If Transfer Request is NOT Raised
     default: guide_raise_transfer
+
+  - id: user_not_revoked
+    type: message
+    prompt:
+      text: |
+        ✅ **Your Access is Active**
+
+        We checked your profile, and it is currently **verified** with **{{ ctx.collected.profile_org_name or ctx.collected.org_channel or "your organization" }}**. Your account does not appear to have been marked as "Not My User" or had its access revoked.
+
+        If you're still facing a login or access issue, please share more details so we can look into it further.
+    next: satisfied
 
   # Fetch organization details using org API (in case orgName is missing from transfer request)
   - id: fetch_org_details
