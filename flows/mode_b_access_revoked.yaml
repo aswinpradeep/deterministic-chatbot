@@ -45,13 +45,45 @@ classification:
     - "not my user"
     - "access revoked"
 
-entry_node: fetch_transfer_status
+entry_node: confirm_access_revoked_message
 
 imports:
   - _terminal
   - fragment: _yp_lookup
+  - fragment: _zoho_ticket
+    with:
+      cf_category:     profile
+      cf_sub_category: access_revoked
+      cf_flow_id:      ACCESS_REVOKED
 
 nodes:
+
+  # ===========================================================================
+  # 1. Confirm the user actually hit the Access Revoked error before
+  #    proceeding — this flow is specifically for that scenario, per the SOP's
+  #    own scenario framing (the error banner text quoted below).
+  # ===========================================================================
+  - id: confirm_access_revoked_message
+    type: message
+    prompt:
+      text: |
+        Please confirm if you see the following message:
+
+        "Your access has been revoked because your organization no longer identifies you as a user. To regain access, please submit a 'Transfer Request' and choose the correct organization."
+    quick_replies:
+      - { id: yes, label: "✅ Yes, I see this message" }
+      - { id: no,  label: "❌ No, I didn't see this" }
+    disable_input: true
+    on_reply:
+      yes: fetch_transfer_status
+      no:  not_access_revoked_scenario
+
+  - id: not_access_revoked_scenario
+    type: message
+    prompt:
+      text: |
+        This option is specifically for the Access Revoked scenario described above. Please choose the option that best matches your issue from the main menu.
+    next: satisfied
 
   # ===========================================================================
   # 2. Verify Transfer Request Status (SOP Step 2.1: Private User Search API)
@@ -86,7 +118,6 @@ nodes:
       - { from: "$.response.content[0].channel",                          to: collected.user_channel }
       - { from: "$.response.content[0].channel",                          to: collected.org_channel }
       - { from: "$.response.content[0].rootOrgId",                        to: collected.root_org_id }
-      - { from: "$.response.content[0].profileStatus",                    to: collected.profile_status }
     on_success: branch_on_transfer_status
     on_error:
       any: escalate_api_error
@@ -98,22 +129,8 @@ nodes:
       # SOP Step 2.2: If Transfer Request is Already Raised
       - { if: "ctx.collected.wf_transfer_id != None and ctx.collected.wf_transfer_id != ''",
           then: fetch_org_details }
-      # Profile is currently VERIFIED with an org — user is not actually flagged as "Not My User"
-      - { if: "(ctx.collected.profile_status or '').upper() == 'VERIFIED'",
-          then: user_not_revoked }
     # SOP Step 4: If Transfer Request is NOT Raised
     default: guide_raise_transfer
-
-  - id: user_not_revoked
-    type: message
-    prompt:
-      text: |
-        ✅ **Your Access is Active**
-
-        We checked your profile, and it is currently **verified** with **{{ ctx.collected.profile_org_name or ctx.collected.org_channel or "your organization" }}**. Your account does not appear to have been marked as "Not My User" or had its access revoked.
-
-        If you're still facing a login or access issue, please share more details so we can look into it further.
-    next: satisfied
 
   # Fetch organization details using org API (in case orgName is missing from transfer request)
   - id: fetch_org_details
@@ -684,12 +701,46 @@ nodes:
       - "Raise a transfer request post-organization creation."
     next: satisfied
 
+  # No MDO Admin AND no YP/SPOC could be identified — raise a ticket for manual
+  # resolution instead of leaving the user with no path forward (SOP §3 fallback).
+  # Matches the ticket_confirm → transfer_llm(auto_raise:silent) → confirm_ticket
+  # convention used by every other ticket-raising path in this codebase, so the
+  # explanation and the final "ticket submitted" message land in separate turns.
   - id: yp_not_found
-    type: message
+    type: ticket_confirm
     prompt:
       text: |
-        We couldn't find the SPOC details for your organization in our current records.
-    next: satisfied
+        **Issue Identified:** Access Revoked — No MDO/SPOC Contact Found
+
+        **Summary of Request:**
+        You reported that your access was revoked and you need help raising a transfer request, but no MDO Admin or YP/SPOC contact could be located for your organization. You would like us to investigate this further.
+
+        • **Organization/Ministry/State:** {{ ctx.collected.dropdown_org_name or ctx.collected.transfer_org_name or ctx.collected.selected_parent_name or ctx.collected.fetched_org_name or 'Not identified' }}
+
+        Please review the details above and confirm whether they are correct.
+    on_confirm: raise_ticket_no_contact
+    on_cancel: satisfied
+
+  - id: raise_ticket_no_contact
+    type: transfer_llm
+    auto_raise: silent
+    llm_context:
+      include_messages:  true
+      include_collected: true
+      include_flow_meta: true
+    llm_directives:
+      objective: |
+        The user's platform access was revoked (flagged "Not My User") and no MDO Admin
+        or YP/SPOC contact could be located for their organization/ministry/state, so the
+        user has no self-service path to restore access.
+        Generate a Zoho support ticket so the support team can manually identify the
+        correct contact and help restore the user's access.
+        Subject: "Access Revoked — No MDO/SPOC Contact Found"
+        Description: include any organization/ministry/state/department names collected
+        so far (transfer_org_name, dropdown_org_name, selected_parent_name,
+        dropdown_dept_name, fetched_org_name) and the user's channel/root org info.
+      priority_override: P3
+    on_complete: confirm_ticket
 
   # ===========================================================================
   # 5. Escalation & Terminal

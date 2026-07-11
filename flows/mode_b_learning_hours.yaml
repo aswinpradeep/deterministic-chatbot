@@ -24,7 +24,7 @@
 # =============================================================================
 
 flow_id: LEARNING_HOURS
-flow_type: deterministic
+flow_type: deterministic_with_llm_fallback
 version: 2
 
 metadata:
@@ -32,7 +32,7 @@ metadata:
   classification:   Service Request
   default_priority: P3
   default_severity: Sev 3
-  menu_label:       "🔄 Learning  Hours not Reflecting"
+  menu_label:       "🔄 Learning Hours not Reflecting"
   menu_group:       "Recognition & Engagement"
   menu_group_order: 4
   menu_order:       12
@@ -61,6 +61,11 @@ imports:
   - _terminal
   - fragment: _mdo_admin_lookup
   - fragment: _yp_lookup
+  - fragment: _zoho_ticket
+    with:
+      cf_category:     platform
+      cf_sub_category: learning_hours
+      cf_flow_id:      LEARNING_HOURS
 
 nodes:
 
@@ -252,7 +257,7 @@ nodes:
         **MDO Name:** {{ ctx.collected.mdo_admin_name | default('—') }}
         **MDO Email ID:** {{ ctx.collected.mdo_admin_email | default('—') }}
 
-        > ℹ️ Once the eHRMS ID is updated, it may take up to **24 hours** for the learning progress to reflect in eHRMS.
+        Once the eHRMS ID is updated, it may take up to **24 hours** for the learning progress to reflect in eHRMS.
     next: satisfied
 
   # Step 1.4 — eHRMS ID present but External System Name missing
@@ -270,18 +275,46 @@ nodes:
         **MDO Name:** {{ ctx.collected.mdo_admin_name | default('—') }}
         **MDO Email ID:** {{ ctx.collected.mdo_admin_email | default('—') }}
 
-        > ℹ️ Once the External System Name is updated, it may take up to **24 hours** for the learning progress to reflect in eHRMS.
+        Once the External System Name is updated, it may take up to **24 hours** for the learning progress to reflect in eHRMS.
     next: satisfied
 
-  # No MDO found in the organization (generic — used by eHRMS and SPARROW paths)
+  # No MDO found in the organization (generic — used by eHRMS and SPARROW paths).
+  # Raise a ticket instead of a dead end — same ticket_confirm →
+  # transfer_llm(auto_raise:silent) → confirm_ticket pattern as access_revoked.yaml.
   - id: mdo_not_found_fallback
-    type: message
+    type: ticket_confirm
     prompt:
       text: |
-        We checked, and couldn't find an MDO Admin mapped to your organization (**{{ ctx.collected.org_channel | default('your organization') }}**).
+        **Issue Identified:** Learning Hours Not Reflecting — No MDO Admin Mapped to Organization
 
-        Please try again after some time.
-    next: satisfied
+        **Summary of Request:**
+        You reported that your learning progress is not reflecting, but no MDO Admin could be located for your organization to help resolve this. You would like us to investigate this further.
+
+        • **Organization:** {{ ctx.collected.org_channel | default('Not identified') }}
+
+        Please review the details above and confirm whether they are correct.
+    on_confirm: raise_ticket_no_mdo
+    on_cancel: satisfied
+
+  - id: raise_ticket_no_mdo
+    type: transfer_llm
+    auto_raise: silent
+    llm_context:
+      include_messages:  true
+      include_collected: true
+      include_flow_meta: true
+    llm_directives:
+      objective: |
+        The user's learning progress is not reflecting in an external system (eHRMS or
+        SPARROW), and no MDO Admin could be located for their organization, so the user
+        has no self-service path to get the required profile fields updated.
+        Generate a Zoho support ticket so the support team can manually identify the
+        correct contact and resolve the mapping/assignment issue.
+        Subject: "Learning Hours Not Reflecting — No MDO Admin Found"
+        Description: include the organization/channel, external system (eHRMS/SPARROW),
+        and eHRMS ID / External System Name status if known.
+      priority_override: P3
+    on_complete: confirm_ticket
 
   # MDO API error
   - id: mdo_api_error
@@ -307,7 +340,7 @@ nodes:
         **Contact Number:** {{ ctx.collected.yp_mobile }}
         {%- endif %}
 
-        > ℹ️ Only APAR-assigned and successfully completed courses/assessments are reflected in SPARROW/APAR.
+        Only APAR-assigned and successfully completed courses/assessments are reflected in SPARROW/APAR.
     next: satisfied
 
   - id: yp_not_found
@@ -412,9 +445,10 @@ nodes:
       - { from: "$.response.profileDetails.professionalDetails[0].designation",  to: collected.user_designation }
       - { from: "$.response.profileDetails.professionalDetails[0].group",        to: collected.user_group }
       - { from: "$.response.profileDetails.cadreDetails",                        to: collected.cadre_details }
-      - { from: "$.response.profileDetails.serviceDetails",                      to: collected.service_details }
-      - { from: "$.response.profileDetails.batch",                               to: collected.batch_details }
-      - { from: "$.response.profileDetails.centralDeputation",                   to: collected.central_deputation }
+      - { from: "$.response.profileDetails.cadreDetails.cadreName",               to: collected.cadre_name }
+      - { from: "$.response.profileDetails.cadreDetails.civilServiceName",        to: collected.service_details }
+      - { from: "$.response.profileDetails.cadreDetails.cadreBatch",              to: collected.batch_details }
+      - { from: "$.response.profileDetails.cadreDetails.isOnCentralDeputation",   to: collected.central_deputation }
     on_success: sp_branch_profile_status
     on_error:
       any: sp_api_error
@@ -517,13 +551,19 @@ nodes:
     type: api_call
     integration: karmayogi
     request:
-      method: GET
+      method: POST
       url: "/api/supportportal/admin/user/v2/assignedcourses/{{ ctx.collected.fetched_user_id }}"
+      headers:
+        x-authenticated-user-token: ""
+      body:
+        courseCategory: "Comprehensive Assessment Program"
     response_mapping:
-      - { from: "$.result.content", to: collected.assigned_courses }
+      - { from: "$.content", to: collected.assigned_courses }
     on_success: sp_branch_assigned_courses
     on_error:
-      any: lookup_mdo_admin
+      # A failed API call does NOT mean "not assigned" — say so honestly
+      # instead of falling through to the MDO/YP "no APAR/CAP" messaging.
+      any: sp_api_error
     timeout_ms: 8000
 
   # Branch: courses assigned → proceed to APAR check; empty → MDO lookup (Step 4.3)
@@ -550,7 +590,10 @@ nodes:
       - { from: "$.count",   to: collected.cbp_total_count }
     on_success: sp_branch_apar_assigned
     on_error:
-      any: lookup_mdo_admin
+      # Same reasoning as sp_fetch_assigned_courses — a technical failure here
+      # doesn't mean the CAP isn't assigned (we already confirmed it is, one
+      # API call ago); don't claim otherwise.
+      any: sp_api_error
     timeout_ms: 8000
 
   # Step 4.3 / 4.5 — Branch on APAR/CAP assignment
