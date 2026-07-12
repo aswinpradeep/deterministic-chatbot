@@ -187,6 +187,7 @@ nodes:
         - **Cadre:** {{ ctx.collected.cadre_name }}
         - **Service:** {{ ctx.collected.service_details }}
         - **Batch:** {{ ctx.collected.batch_details }}
+        - **Central Deputation:** {{ 'Yes' if ctx.collected.central_deputation else 'No' }}
 
         Kindly confirm whether the above details are correct.
     quick_replies:
@@ -632,12 +633,49 @@ nodes:
     next: satisfied
 
   - id: yp_not_found
-    type: message
+    type: ticket_confirm
     prompt:
       text: |
         We couldn't retrieve the MDO Admin or YP/AM contact details for your organization at this time.
-        Please reach out to your concerned authority for further assistance.
-    next: satisfied
+
+        This needs further investigation from our support team. Would you like us to create a support ticket for this issue?
+    on_confirm: yp_not_found_ticket_summary
+    on_cancel: satisfied
+
+  - id: yp_not_found_ticket_summary
+    type: ticket_confirm
+    prompt:
+      text: |
+        **Issue Identified:** CAP Not Visible — No MDO Admin or YP Contact Found
+
+        **Summary of Request:**
+        Your Comprehensive Assessment Program (CAP) is not visible, and we could not locate an MDO Admin or YP/AM contact for your organization to help resolve this. You would like us to investigate this further.
+
+        • **Organization:** {{ ctx.collected.org_name or ctx.collected.org_channel | default('Not identified') }}
+
+        Please review the details above and confirm whether they are correct.
+    on_confirm: yp_not_found_raise_ticket
+    on_cancel: satisfied
+
+  - id: yp_not_found_raise_ticket
+    type: transfer_llm
+    auto_raise: silent
+    llm_context:
+      include_messages:  true
+      include_collected: true
+      include_flow_meta: true
+    llm_directives:
+      objective: |
+        The user's Comprehensive Assessment Program (CAP) is not visible, and no MDO Admin
+        or YP/AM contact could be located for their organization either — so the user has
+        no self-service path to get this resolved.
+        Generate a Zoho support ticket so the support team can manually identify the
+        correct contact and resolve the visibility issue.
+        Subject: "CAP Not Visible — No Admin or YP Contact Found"
+        Description: include the organization/channel and note that neither an MDO Admin
+        nor a YP/AM contact could be found.
+      priority_override: P3
+    on_complete: confirm_ticket
 
   # ===========================================================================
   # Final Assessment Locked in CAP - Subcase 3
@@ -771,9 +809,19 @@ nodes:
     dynamic_options:
       source: context
       context_key: collected.cap_incomplete_courses_picker
+      # id_field uses courseName (not courseId) for the picker's key: every
+      # pending resource under the same course was previously built with the
+      # SAME courseId (the parent course's id), so the picker collapsed all
+      # sibling resources under one course down to a single selectable entry.
+      # Resource names are unique within a course, so keying on courseName
+      # keeps each resource distinct. extra_fields restores the real course
+      # DO_ID into selected_pending_course_id on pick, since that's still
+      # needed by share_pending_resource_link's "open course" URL below.
       response_mapping:
-        id_field: courseId
+        id_field: courseName
         label_field: courseName
+        extra_fields:
+          - { from: courseId, to: collected.selected_pending_course_id }
     next: share_pending_resource_link
 
   - id: share_pending_resource_link

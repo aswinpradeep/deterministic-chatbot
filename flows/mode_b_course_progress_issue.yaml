@@ -645,8 +645,8 @@ nodes:
   - id: branch_on_resource_type
     type: branch
     rules:
-      - { if: "ctx.collected.all_resources_assessment == true", then: resolution_assessment_guidance }
-      - { if: "ctx.collected.has_scorm_resources == true",      then: resolution_scorm_guidance }
+      - { if: "ctx.collected.all_resources_assessment == True", then: resolution_assessment_guidance }
+      - { if: "ctx.collected.has_scorm_resources == True",      then: resolution_scorm_guidance }
     default: resolution_non_scorm_guidance
 
 
