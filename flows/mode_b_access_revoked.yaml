@@ -45,7 +45,7 @@ classification:
     - "not my user"
     - "access revoked"
 
-entry_node: confirm_access_revoked_message
+entry_node: fetch_transfer_status
 
 imports:
   - _terminal
@@ -57,33 +57,6 @@ imports:
       cf_flow_id:      ACCESS_REVOKED
 
 nodes:
-
-  # ===========================================================================
-  # 1. Confirm the user actually hit the Access Revoked error before
-  #    proceeding — this flow is specifically for that scenario, per the SOP's
-  #    own scenario framing (the error banner text quoted below).
-  # ===========================================================================
-  - id: confirm_access_revoked_message
-    type: message
-    prompt:
-      text: |
-        Please confirm if you see the following message:
-
-        "Your access has been revoked because your organization no longer identifies you as a user. To regain access, please submit a 'Transfer Request' and choose the correct organization."
-    quick_replies:
-      - { id: yes, label: "✅ Yes, I see this message" }
-      - { id: no,  label: "❌ No, I didn't see this" }
-    disable_input: true
-    on_reply:
-      yes: fetch_transfer_status
-      no:  not_access_revoked_scenario
-
-  - id: not_access_revoked_scenario
-    type: message
-    prompt:
-      text: |
-        This option is specifically for the Access Revoked scenario described above. Please choose the option that best matches your issue from the main menu.
-    next: satisfied
 
   # ===========================================================================
   # 2. Verify Transfer Request Status (SOP Step 2.1: Private User Search API)
@@ -118,6 +91,8 @@ nodes:
       - { from: "$.response.content[0].channel",                          to: collected.user_channel }
       - { from: "$.response.content[0].channel",                          to: collected.org_channel }
       - { from: "$.response.content[0].rootOrgId",                        to: collected.root_org_id }
+      # Verification status — nested under profileDetails, not top-level
+      - { from: "$.response.content[0].profileDetails.profileStatus",      to: collected.profile_status }
     on_success: branch_on_transfer_status
     on_error:
       any: escalate_api_error
@@ -126,11 +101,22 @@ nodes:
     type: branch
     rules:
       - { if: "ctx.collected.user_found_count == 0", then: user_not_found_fallback }
+      # "Not My User" check — if the account is already verified, access was
+      # never actually revoked; skip the transfer-request flow entirely.
+      - { if: "(ctx.collected.profile_status or '').upper() == 'VERIFIED'",
+          then: account_already_verified }
       # SOP Step 2.2: If Transfer Request is Already Raised
       - { if: "ctx.collected.wf_transfer_id != None and ctx.collected.wf_transfer_id != ''",
           then: fetch_org_details }
     # SOP Step 4: If Transfer Request is NOT Raised
     default: guide_raise_transfer
+
+  - id: account_already_verified
+    type: message
+    prompt:
+      text: |
+        We checked your profile, and the account is already verified with **{{ ctx.collected.profile_org_name or ctx.collected.org_channel or "your organization" }}**.
+    next: satisfied
 
   # Fetch organization details using org API (in case orgName is missing from transfer request)
   - id: fetch_org_details
