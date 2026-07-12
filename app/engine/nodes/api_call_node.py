@@ -868,8 +868,6 @@ def _nested_cbp_courses(enrollments: Any, all_courses: Any, is_apar: bool) -> li
         if plan_is_apar != is_apar:
             continue
 
-        plan_index += 1
-        plan_name = f"Plan {plan_index}"
         plan_end_raw = plan.get("endDate")
 
         plan_end = "—"
@@ -882,20 +880,20 @@ def _nested_cbp_courses(enrollments: Any, all_courses: Any, is_apar: bool) -> li
         content_list = plan.get("contentList")
         if not isinstance(content_list, list):
             continue
-            
+
         plan_courses = []
         for course in content_list:
             if not isinstance(course, dict):
                 continue
             if course.get("contentType") != "Course":
                 continue
-                
+
             course_id = str(course.get("identifier", ""))
             course_name = str(course.get("name", "Unknown Course"))
-            
+
             enrolled_data = enrollment_map.get(course_id)
             status_text = "Not Started"
-            
+
             if enrolled_data:
                 status_num = _enrollment_status_to_int(enrolled_data.get("status"))
                 if status_num == 2:
@@ -904,26 +902,33 @@ def _nested_cbp_courses(enrollments: Any, all_courses: Any, is_apar: bool) -> li
                     status_text = "In Progress"
                 else:
                     status_text = "Not Started"
-                        
+
             plan_courses.append({
                 "courseId": course_id,
                 "courseName": course_name,
                 "progress": {"status": status_text},
                 "extra": {
-                    "planName": plan_name,
                     "endDate": plan_end,
                     "statusText": status_text
                 }
             })
-            
+
         if plan_courses:
+            # Only assign/consume a "Plan N" number for plans that actually
+            # get shown. Numbering upfront (before this check) caused gaps
+            # in what the user sees whenever a plan had no qualifying Course
+            # content — its number was still consumed, just never displayed.
+            plan_index += 1
+            plan_name = f"Plan {plan_index}"
+            for pc in plan_courses:
+                pc["extra"]["planName"] = plan_name
             result.append({
                 "courseId": plan_name,
                 "courseName": plan_name,
                 "combinedMeta": f"Ends: {plan_end}" if plan_end != "—" else "",
                 "children": plan_courses
             })
-            
+
     return result
 
 

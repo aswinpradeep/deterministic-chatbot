@@ -32,7 +32,7 @@
 # =============================================================================
 
 flow_id: FIND_COURSE
-flow_type: deterministic
+flow_type: deterministic_with_llm_fallback
 version: 1
 
 metadata:
@@ -72,6 +72,11 @@ imports:
   - _karmayogi_user
   - _mdo_admin_lookup
   - _yp_lookup
+  - fragment: _zoho_ticket
+    with:
+      cf_category:     course
+      cf_sub_category: find_course
+      cf_flow_id:      FIND_COURSE
 
 nodes:
 
@@ -520,14 +525,49 @@ nodes:
 
   # MDO not found AND YP not found
   - id: yp_not_found
-    type: resolution
+    type: ticket_confirm
     prompt:
       text: |
-        We checked, and it looks like the course access criteria don't match your current profile.
+        We checked, and it looks like the course access criteria don't match your current profile, but we couldn't retrieve an MDO or YP contact for your organization at this time.
 
-        Please reach out to your concerned MDO or YP for further assistance with course eligibility and access.
-    steps: []
-    next: satisfied
+        This needs further investigation from our support team. Would you like us to create a support ticket for this issue?
+    on_confirm: yp_not_found_ticket_summary
+    on_cancel: satisfied
+
+  - id: yp_not_found_ticket_summary
+    type: ticket_confirm
+    prompt:
+      text: |
+        **Issue Identified:** Course Access — No MDO or YP Contact Found
+
+        **Summary of Request:**
+        The course access criteria don't match your current profile, and we could not locate an MDO or YP contact for your organization to help resolve this. You would like us to investigate this further.
+
+        • **Organization:** {{ ctx.collected.org_channel | default('Not identified') }}
+
+        Please review the details above and confirm whether they are correct.
+    on_confirm: yp_not_found_raise_ticket
+    on_cancel: satisfied
+
+  - id: yp_not_found_raise_ticket
+    type: transfer_llm
+    auto_raise: silent
+    llm_context:
+      include_messages:  true
+      include_collected: true
+      include_flow_meta: true
+    llm_directives:
+      objective: |
+        The user's course access criteria don't match their current profile, and no MDO or
+        YP contact could be located for their organization either — so the user has no
+        self-service path to resolve this.
+        Generate a Zoho support ticket so the support team can manually identify the
+        correct contact and resolve the eligibility/access issue.
+        Subject: "Course Access — No MDO or YP Contact Found"
+        Description: include the organization/channel and note that neither an MDO nor a
+        YP contact could be found.
+      priority_override: P3
+    on_complete: confirm_ticket
 
   # Search API error
   - id: search_api_error

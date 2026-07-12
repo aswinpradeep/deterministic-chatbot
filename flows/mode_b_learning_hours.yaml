@@ -316,8 +316,28 @@ nodes:
       priority_override: P3
     on_complete: confirm_ticket
 
-  # MDO API error
+  # MDO API error — eHRMS raises a support ticket instead of dead-ending;
+  # SPARROW/APAR keeps the original retry message unchanged (same shared
+  # lookup_mdo_admin node is used by both sections, so the split happens
+  # here based on which section is actually active).
   - id: mdo_api_error
+    type: branch
+    rules:
+      - if: "ctx.collected.external_system == 'EHRMS'"
+        then: mdo_api_error_ehrms_ticket
+    default: mdo_api_error_generic
+
+  - id: mdo_api_error_ehrms_ticket
+    type: ticket_confirm
+    prompt:
+      text: |
+        We ran into an issue while fetching MDO details for your organization.
+
+        This needs further investigation from our support team. Would you like us to create a support ticket for this issue?
+    on_confirm: raise_ticket_no_mdo
+    on_cancel: satisfied
+
+  - id: mdo_api_error_generic
     type: message
     prompt:
       text: |
@@ -601,11 +621,30 @@ nodes:
     type: branch
     rules:
       - { if: "ctx.collected.cbp_total_count != None and ctx.collected.cbp_total_count > 0",
-          then: sp_fetch_enrollment }
+          then: sp_ask_cap_or_apar }
     # Step 4.3 — No assignment → MDO lookup
     default: lookup_mdo_admin
 
-  # Step 4.5 — APAR/CAP Assigned — check enrollment for course completion
+  # Step 4.4a (new) — Disambiguate: which category is the user asking about?
+  # Multiple CAP/APAR courses can be assigned at once, so we must not assume
+  # a single completed course before checking reflection status.
+  - id: sp_ask_cap_or_apar
+    type: message
+    prompt:
+      text: "Please choose the one you are facing the issue with:"
+    quick_replies:
+      - { id: CAP,  label: "📋 CAP" }
+      - { id: APAR, label: "📄 APAR" }
+    disable_input: true
+    on_reply:
+      save_to: collected.sp_category
+      CAP:  sp_fetch_enrollment
+      APAR: sp_fetch_enrollment
+
+  # Step 4.5 — APAR/CAP Assigned — check enrollment for course completion.
+  # Also builds the APAR nested Plan→Course picker (reusing the same
+  # nested_apar_courses transform the APAR-not-visible flow already uses)
+  # so sp_pick_apar_course below has data to show.
   - id: sp_fetch_enrollment
     type: api_call
     integration: karmayogi
@@ -618,30 +657,83 @@ nodes:
           status: ["Completed"]
     response_mapping:
       - { from: "$.courses", to: collected.sp_completed_courses }
-    on_success: sp_branch_cap_completion
+      - { from: "$.courses", to: collected.sp_apar_picker_list, transform: nested_apar_courses, transform_ctx_key: collected.all_courses }
+    on_success: sp_branch_category_picker
     on_error:
-      any: sp_branch_cap_completion
+      any: sp_branch_category_picker
     timeout_ms: 8000
 
-  # Branch: any APAR course completed with 100% → check time elapsed
-  # Otherwise → CAP not passed, guide reattempt (Step 4.5.1)
-  - id: sp_branch_cap_completion
+  # Step 4.5a (new) — Route to the right course picker for the chosen category
+  - id: sp_branch_category_picker
+    type: branch
+    rules:
+      - { if: "ctx.collected.sp_category == 'CAP'", then: sp_pick_cap_course }
+    default: sp_pick_apar_course
+
+  # Step 4.5b (new) — CAP course picker (assigned_courses already fetched
+  # earlier at sp_fetch_assigned_courses — no extra API call needed)
+  - id: sp_pick_cap_course
+    type: collect
+    prompt:
+      text: "You have multiple CAP courses. Please select the one you're asking about:"
+      title: "Select CAP Course"
+    field:
+      name: collected.sp_selected_course_id
+      type: select
+    dynamic_options:
+      source: context
+      context_key: collected.assigned_courses
+      response_mapping:
+        id_field: identifier
+        label_field: name
+        extra_fields:
+          - { from: name, to: collected.sp_selected_course_name }
+    next: sp_branch_selected_course_completed
+
+  # Step 4.5c (new) — APAR course picker (nested Plan→Course, same shape as
+  # mode_b_apar_not_visible.yaml's own picker)
+  - id: sp_pick_apar_course
+    type: collect
+    prompt:
+      text: "You have multiple APAR courses. Please select the one you're asking about:"
+      title: "Select APAR Course"
+    field:
+      name: collected.sp_selected_course_id
+      type: select
+    dynamic_options:
+      source: context
+      context_key: collected.sp_apar_picker_list
+      response_mapping:
+        id_field: courseId
+        label_field: courseName
+        extra_fields:
+          - { from: courseName, to: collected.sp_selected_course_name }
+    next: sp_branch_selected_course_completed
+
+  # Step 4.5d (new) — Is the SPECIFIC selected course actually completed?
+  # Same completion check as before, just scoped to the one course chosen
+  # instead of "any completed course at all".
+  - id: sp_branch_selected_course_completed
     type: branch
     rules:
       - if: >
           len([1 for c in (ctx.collected.sp_completed_courses or [])
-               if (c.get('completionPercentage') or 0) == 100]) > 0
+               if c.get('courseId') == ctx.collected.sp_selected_course_id
+               and (c.get('completionPercentage') or 0) == 100]) > 0
         then: sp_ask_time_elapsed
     default: sp_cap_guidance
 
-  # Step 4.5.1 — CAP assessment not passed
+  # Step 4.5.1 — CAP assessment not passed for the selected course.
+  # Per SOP, this is always "the CAP assessment" regardless of whether the
+  # user picked CAP or APAR as the category — it's a fixed, specific
+  # assessment, not something that varies by category.
   - id: sp_cap_guidance
     type: message
     prompt:
       text: |
-        We checked, and found that your APAR courses have been assigned; however, the **CAP assessment** has not yet been passed.
+        We checked, and found that **{{ ctx.collected.sp_selected_course_name | default('this course') }}** has been assigned; however, the **CAP assessment** has not yet been passed.
 
-        Please reattempt and pass the **CAP assessment**. Reflection in SPARROW/APAR occurs only after successful completion of the required courses and assessment.
+        Please reattempt and pass the assessment. Reflection in SPARROW/APAR occurs only after successful completion of the required courses and assessment.
     next: satisfied
 
   # Step 4.5.2 / 4.5.3 — Completion found: ask if 24 hours have passed
@@ -649,7 +741,7 @@ nodes:
     type: message
     prompt:
       text: |
-        We can see that course completion data is reflecting in our system.
+        We can see that **{{ ctx.collected.sp_selected_course_name | default('the course') }}** shows as completed in our system.
 
         Has it been more than **24 hours** since you completed the course/assessment?
     quick_replies:
@@ -693,7 +785,7 @@ nodes:
 
         **SPARROW Support Email:** support-sparrow@gov.in
 
-        Please share your iGOT user ID and course details with them for further investigation.
+        Please share your iGOT emailId and course details with them for further investigation.
     next: satisfied
 
   # Step 4.5.3 — Email IDs do not match → reference video
@@ -722,7 +814,7 @@ nodes:
         **MDO Name:** {{ ctx.collected.mdo_admin_name | default('—') }}
         **MDO Email ID:** {{ ctx.collected.mdo_admin_email | default('—') }}
 
-        > ℹ️ Only APAR-assigned and successfully completed courses/assessments are reflected in SPARROW/APAR.
+        Only APAR-assigned and successfully completed courses/assessments are reflected in SPARROW/APAR.
     next: satisfied
 
   # ===========================================================================

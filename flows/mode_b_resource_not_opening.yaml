@@ -432,6 +432,19 @@ nodes:
     prompt:
       text: |
         We couldn't find any resources in the selected course.
+    next: no_resources_found_ticket_confirm
 
-        If you believe this is incorrect, please try again after some time or raise a support ticket.
-    next: satisfied
+  - id: no_resources_found_ticket_confirm
+    type: ticket_confirm
+    prompt:
+      text: |
+        This needs further investigation from our support team.
+
+        **Summary of Request:**
+        You reported a resource/content opening issue and no resources could be found in the selected course. You would like us to investigate this issue further.
+
+        • **Course:** {{ ctx.collected.course_name }}
+
+        Please review the details above and confirm whether they are correct.
+    on_confirm: resource_auto_ticket
+    on_cancel: satisfied
