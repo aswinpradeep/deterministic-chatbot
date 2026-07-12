@@ -248,23 +248,35 @@ nodes:
       - { if: "'program' in lower(str(ctx.collected.c1_primary_category))", then: c1_cert_delayed_program }
     default: c1_cert_delayed
 
+  # First confirmation gate — get explicit opt-in before asking for personal
+  # details (email/mobile). Uses the standard ticket_confirm node/buttons,
+  # same as every other ticket-raising path in this codebase.
   - id: c1_cert_delayed
-    type: message
+    type: ticket_confirm
     prompt:
       text: |
-        We checked, and found that the course **{{ ctx.collected.c1_course_name }}** shows as completed, but the certificate has not been issued yet even though more than 24 hours have passed since completion.
-
-        This looks like it may need further investigation from our support team. Let's raise a support ticket for certificate issuance.
-    next: c1_cert_delayed_collect_details
+        We checked, and found that the course **{{ ctx.collected.c1_course_name }}** has been completed. This needs further investigation from our team. Would you like us to create a support ticket for certificate issue?
+    on_confirm: c1_cert_delayed_check_contact
+    on_cancel: satisfied
 
   - id: c1_cert_delayed_program
-    type: message
+    type: ticket_confirm
     prompt:
       text: |
-        We checked, and found that the program **{{ ctx.collected.c1_course_name }}** shows as completed, but the certificate has not been issued yet even though more than 24 hours have passed since completion.
+        We checked, and found that the program **{{ ctx.collected.c1_course_name }}** has been completed. This needs further investigation from our team. Would you like us to create a support ticket for certificate issue?
+    on_confirm: c1_cert_delayed_check_contact
+    on_cancel: satisfied
 
-        This looks like it may need further investigation from our support team. Let's raise a support ticket for certificate issuance.
-    next: c1_cert_delayed_collect_details
+  # email/mobile are pre-fetched from the learner's Karmayogi profile at flow
+  # start whenever available. Entering the collect node below with both
+  # already filled makes it complete silently with no prompt, stalling the
+  # turn (interrupt_after still fires on that empty-activity turn) — so skip
+  # straight to the summary in that case and only ask when actually missing.
+  - id: c1_cert_delayed_check_contact
+    type: branch
+    rules:
+      - { if: "ctx.collected.email and ctx.collected.mobile", then: c1_cert_delayed_ticket_confirm }
+    default: c1_cert_delayed_collect_details
 
   - id: c1_cert_delayed_collect_details
     type: collect

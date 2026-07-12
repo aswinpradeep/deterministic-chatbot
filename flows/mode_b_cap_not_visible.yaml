@@ -232,7 +232,7 @@ nodes:
         courseCategory: "Comprehensive Assessment Program"
     response_mapping:
       - { from: "$.count", to: collected.cap_count }
-      - { from: "$.content", to: collected.all_caps }
+      - { from: "$.content", to: collected.all_caps, transform: sort_caps_by_end_date }
       - { from: "$.content[0].identifier", to: collected.cap_id }
       - { from: "$.content[0].name", to: collected.cap_name }
       - { from: "$.content[0].endDate", to: collected.cap_end_date }
