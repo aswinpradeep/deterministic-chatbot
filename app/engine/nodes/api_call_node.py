@@ -42,6 +42,7 @@ YAML shape (canonical example):
 from __future__ import annotations
 
 import asyncio
+import datetime
 import hashlib
 import json
 import logging
@@ -815,8 +816,29 @@ def _extract_non_apar_plans(enrollments: Any, all_courses: Any) -> list[dict]:
     return _extract_cbp_plans(all_courses, is_apar=False)
 
 
+def _parse_plan_end_date(plan_end_raw: Any) -> datetime.datetime | None:
+    """Parse a plan's endDate (epoch-ms int or ISO string) into a UTC datetime.
+
+    Returns None if missing/unparseable, so callers can sort those last.
+    """
+    if not plan_end_raw:
+        return None
+    try:
+        if isinstance(plan_end_raw, (int, float)):
+            return datetime.datetime.fromtimestamp(int(plan_end_raw) / 1000.0, tz=datetime.timezone.utc)
+        raw_str = str(plan_end_raw).replace("Z", "+00:00")
+        return datetime.datetime.fromisoformat(raw_str)
+    except Exception:
+        return None
+
+
 def _nested_cbp_courses(enrollments: Any, all_courses: Any, is_apar: bool) -> list[dict]:
-    """Return nested JSON of Plans containing Courses in the children array."""
+    """Return nested JSON of Plans containing Courses in the children array.
+
+    Plans are sorted ascending by due date (endDate) — nearest upcoming due date
+    first — so the picker lists the most urgent training plans at the top.
+    Plans with a missing/unparseable endDate sort last, in their original order.
+    """
     if not isinstance(all_courses, list):
         return []
 
@@ -826,51 +848,52 @@ def _nested_cbp_courses(enrollments: Any, all_courses: Any, is_apar: bool) -> li
             if isinstance(e, dict) and "courseId" in e:
                 enrollment_map[str(e["courseId"])] = e
 
+    _no_date = datetime.datetime.max.replace(tzinfo=datetime.timezone.utc)
+
+    def _sort_key(pair: tuple[int, Any]) -> tuple[bool, datetime.datetime, int]:
+        index, plan = pair
+        parsed = _parse_plan_end_date(plan.get("endDate")) if isinstance(plan, dict) else None
+        return (parsed is None, parsed or _no_date, index)
+
+    sortable_courses = sorted(enumerate(all_courses), key=_sort_key)
+
     result = []
     plan_index = 0
-    
-    for plan in all_courses:
+
+    for _original_index, plan in sortable_courses:
         if not isinstance(plan, dict):
             continue
-            
+
         plan_is_apar = bool(plan.get("isApar"))
         if plan_is_apar != is_apar:
             continue
-            
-        plan_index += 1
-        plan_name = f"Plan {plan_index}"
+
         plan_end_raw = plan.get("endDate")
-        
+
         plan_end = "—"
-        if plan_end_raw:
-            try:
-                import datetime
-                if isinstance(plan_end_raw, (int, float)):
-                    dt = datetime.datetime.fromtimestamp(int(plan_end_raw) / 1000.0, tz=datetime.timezone.utc)
-                else:
-                    raw_str = str(plan_end_raw).replace("Z", "+00:00")
-                    dt = datetime.datetime.fromisoformat(raw_str)
-                plan_end = dt.strftime("%d/%m/%Y")
-            except Exception:
-                plan_end = str(plan_end_raw)
-                
+        dt = _parse_plan_end_date(plan_end_raw)
+        if dt is not None:
+            plan_end = dt.strftime("%d/%m/%Y")
+        elif plan_end_raw:
+            plan_end = str(plan_end_raw)
+
         content_list = plan.get("contentList")
         if not isinstance(content_list, list):
             continue
-            
+
         plan_courses = []
         for course in content_list:
             if not isinstance(course, dict):
                 continue
             if course.get("contentType") != "Course":
                 continue
-                
+
             course_id = str(course.get("identifier", ""))
             course_name = str(course.get("name", "Unknown Course"))
-            
+
             enrolled_data = enrollment_map.get(course_id)
             status_text = "Not Started"
-            
+
             if enrolled_data:
                 status_num = _enrollment_status_to_int(enrolled_data.get("status"))
                 if status_num == 2:
@@ -879,26 +902,33 @@ def _nested_cbp_courses(enrollments: Any, all_courses: Any, is_apar: bool) -> li
                     status_text = "In Progress"
                 else:
                     status_text = "Not Started"
-                        
+
             plan_courses.append({
                 "courseId": course_id,
                 "courseName": course_name,
                 "progress": {"status": status_text},
                 "extra": {
-                    "planName": plan_name,
                     "endDate": plan_end,
                     "statusText": status_text
                 }
             })
-            
+
         if plan_courses:
+            # Only assign/consume a "Plan N" number for plans that actually
+            # get shown. Numbering upfront (before this check) caused gaps
+            # in what the user sees whenever a plan had no qualifying Course
+            # content — its number was still consumed, just never displayed.
+            plan_index += 1
+            plan_name = f"Plan {plan_index}"
+            for pc in plan_courses:
+                pc["extra"]["planName"] = plan_name
             result.append({
                 "courseId": plan_name,
                 "courseName": plan_name,
                 "combinedMeta": f"Ends: {plan_end}" if plan_end != "—" else "",
                 "children": plan_courses
             })
-            
+
     return result
 
 
@@ -908,6 +938,24 @@ def _nested_apar_courses(enrollments: Any, all_courses: Any) -> list[dict]:
 
 def _nested_non_apar_courses(enrollments: Any, all_courses: Any) -> list[dict]:
     return _nested_cbp_courses(enrollments, all_courses, is_apar=False)
+
+
+def _sort_caps_by_end_date(caps: Any) -> list:
+    """Sort a list of CAP assignments ascending by endDate — nearest upcoming
+    due date first — same ordering rule as _nested_cbp_courses' Plans.
+    CAPs with a missing/unparseable endDate sort last, in original order.
+    """
+    if not isinstance(caps, list):
+        return caps
+
+    _no_date = datetime.datetime.max.replace(tzinfo=datetime.timezone.utc)
+
+    def _sort_key(pair: tuple[int, Any]) -> tuple[bool, datetime.datetime, int]:
+        index, cap = pair
+        parsed = _parse_plan_end_date(cap.get("endDate")) if isinstance(cap, dict) else None
+        return (parsed is None, parsed or _no_date, index)
+
+    return [cap for _, cap in sorted(enumerate(caps), key=_sort_key)]
 
 
 # ---------------------------------------------------------------------------
@@ -2286,6 +2334,7 @@ _TRANSFORMS: dict[str, Any] = {
     "extract_non_apar_plans":   _extract_non_apar_plans,
     "nested_apar_courses":      _nested_apar_courses,
     "nested_non_apar_courses":  _nested_non_apar_courses,
+    "sort_caps_by_end_date":    _sort_caps_by_end_date,
 }
 
 

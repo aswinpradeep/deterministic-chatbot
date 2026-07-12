@@ -67,6 +67,7 @@ imports:
       field_prefix:  "c1_"
       next:          c1_read_course_content
       on_empty:      no_courses_found_cert
+      empty_message: 'You do not have any enrolled courses or programs with In-Progress or Completed status.\n\nPlease enrol in a course on the iGOT Karmayogi portal and try again.'
 
 nodes:
 
@@ -180,9 +181,12 @@ nodes:
   - id: c1_branch_certificate_issued
     type: branch
     rules:
-      # Guard: if completedOn was null, treat as > 24h (same UX — cert should be available)
-      - { if: "ctx.collected.c1_completed_on_iso == None or hours_since(ctx.collected.c1_completed_on_iso) > 24",
+      # issuedCertificates is the authoritative signal — if present, cert is ready.
+      - { if: "ctx.collected.c1_issued_certificates != None and len(ctx.collected.c1_issued_certificates) > 0",
           then: c1_branch_certificate_available }
+      # Guard: if completedOn was null, treat as > 24h (same UX as before)
+      - { if: "ctx.collected.c1_completed_on_iso == None or hours_since(ctx.collected.c1_completed_on_iso) > 24",
+          then: c1_branch_cert_delayed }
     default: c1_branch_wait_24h
 
   - id: c1_branch_certificate_available
@@ -236,6 +240,87 @@ nodes:
     prompt:
       text: "Certificate generation may take up to **24 hours** after successful course completion. Please wait until 24 hours have elapsed from the completion time and then try downloading the certificate again."
     next: satisfied
+
+  # Completed, no certificate issued, and more than 24h have passed — needs investigation
+  - id: c1_branch_cert_delayed
+    type: branch
+    rules:
+      - { if: "'program' in lower(str(ctx.collected.c1_primary_category))", then: c1_cert_delayed_program }
+    default: c1_cert_delayed
+
+  # First confirmation gate — get explicit opt-in before asking for personal
+  # details (email/mobile). Uses the standard ticket_confirm node/buttons,
+  # same as every other ticket-raising path in this codebase.
+  - id: c1_cert_delayed
+    type: ticket_confirm
+    prompt:
+      text: |
+        We checked, and found that the course **{{ ctx.collected.c1_course_name }}** has been completed. This needs further investigation from our team. Would you like us to create a support ticket for certificate issue?
+    on_confirm: c1_cert_delayed_check_contact
+    on_cancel: satisfied
+
+  - id: c1_cert_delayed_program
+    type: ticket_confirm
+    prompt:
+      text: |
+        We checked, and found that the program **{{ ctx.collected.c1_course_name }}** has been completed. This needs further investigation from our team. Would you like us to create a support ticket for certificate issue?
+    on_confirm: c1_cert_delayed_check_contact
+    on_cancel: satisfied
+
+  # email/mobile are pre-fetched from the learner's Karmayogi profile at flow
+  # start whenever available. Entering the collect node below with both
+  # already filled makes it complete silently with no prompt, stalling the
+  # turn (interrupt_after still fires on that empty-activity turn) — so skip
+  # straight to the summary in that case and only ask when actually missing.
+  - id: c1_cert_delayed_check_contact
+    type: branch
+    rules:
+      - { if: "ctx.collected.email and ctx.collected.mobile", then: c1_cert_delayed_ticket_confirm }
+    default: c1_cert_delayed_collect_details
+
+  - id: c1_cert_delayed_collect_details
+    type: collect
+    prompt:
+      text: |
+        To raise a support ticket for certificate issuance, could you share the following details?
+    prompts:
+      - { field: collected.email,  text: "📧 Registered Email ID (e.g., learner@gov.in):", optional: false }
+      - { field: collected.mobile, text: "📱 Mobile Number (e.g., 9876543210):",            optional: false }
+    next: c1_cert_delayed_ticket_confirm
+
+  - id: c1_cert_delayed_ticket_confirm
+    type: ticket_confirm
+    prompt:
+      text: |
+        **Issue Identified:** Certificate Not Issued
+
+        **Summary of Request:**
+        The course/program has been completed and more than 24 hours have passed, but the certificate has not been issued yet. You would like us to investigate and issue the certificate.
+
+        • **Course Name:** {{ ctx.collected.c1_course_name }}
+        • **Registered Email ID:** {{ ctx.collected.email }}
+        • **Mobile Number:** {{ ctx.collected.mobile }}
+
+        Please review the details above and confirm whether they are correct.
+    on_confirm: c1_cert_delayed_raise_ticket
+    on_cancel: satisfied
+
+  - id: c1_cert_delayed_raise_ticket
+    type: transfer_llm
+    auto_raise: silent
+    llm_context:
+      include_messages:  true
+      include_collected: true
+      include_flow_meta: true
+    llm_directives:
+      objective: |
+        The learner's course/program has been marked as completed and more than 24 hours have passed, but the certificate has not been issued.
+        Generate a support ticket for certificate issuance.
+        Subject: "Certificate Not Issued — iGOT Support Needed"
+        Description: Include Course Name: {{ ctx.collected.c1_course_name }}, Registered Email ID: {{ ctx.collected.email }}, Mobile Number: {{ ctx.collected.mobile }}. Note that the certificate has not been generated despite completion and the 24-hour window having elapsed.
+      priority_override: P3
+    on_complete: confirm_ticket
+    on_restart: ask_certificate_issue
 
   # --------------------------------------------------------------------------
   # Step 2 — Incomplete Resource Lookup (course in-progress)
@@ -455,8 +540,7 @@ nodes:
 
   # Step 2 - Name is Correct
   - id: c3_name_correct
-    type: end
-    outcome: self_served
+    type: message
     prompt:
       text: |
         Since your profile name is correct, please re-download the certificate by following the steps below.
@@ -468,6 +552,7 @@ nodes:
         4. Locate the required certificate.
         5. Click on **Download Certificate**.
         6. Verify whether the downloaded certificate displays the correct name.
+    next: satisfied
 
   # Step 3 - Name is Incorrect
   - id: c3_name_incorrect
@@ -493,8 +578,7 @@ nodes:
 
   # Step 3.2 - Confirms Yes
   - id: c3_guide_update_profile
-    type: end
-    outcome: self_served
+    type: message
     prompt:
       text: |
         Please follow the below steps to update your profile name:
@@ -511,18 +595,30 @@ nodes:
         3. Locate the required certificate.
         4. Click on **Download Certificate**.
         5. Verify whether the updated name is reflected in the downloaded certificate.
+    next: satisfied
 
   # Step 3.3 - Confirms No
   - id: c3_no_update
-    type: end
-    outcome: self_served
+    type: message
     prompt:
       text: |
         No problem.
 
-        If you decide to update your profile name in the future, you can follow the above steps and re-download the certificate.
+        If you decide to update your profile name in the future, you can follow the steps below and re-download the certificate.
 
-        Please feel free to reach out if you need any further assistance.
+        1. Log in to your iGOT Karmayogi account.
+        2. Go to **Profile**.
+        3. Click on **Edit Profile**.
+        4. Update the **Name** field with the correct details.
+        5. Save the changes.
+
+        Once the profile has been updated successfully:
+        1. Go to **Profile**.
+        2. Open the **Certificates** section.
+        3. Locate the required certificate.
+        4. Click on **Download Certificate**.
+        5. Verify whether the updated name is reflected in the downloaded certificate.
+    next: satisfied
 
   # ===========================================================================
   # Generic resolution (catch-all for unexpected paths)

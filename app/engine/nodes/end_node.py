@@ -36,12 +36,27 @@ class EndNode(NodeHandler):
                 "user_id_hash": state.user_id_hash,
                 "channel": state.channel,
             }
+            # `pending_activities` is reset to [] at the start of every user turn
+            # (see app/api/routes.py:_build_state_update). If it already has entries
+            # here, this end node was reached by auto-chaining from a prior node in
+            # the SAME turn (e.g. a plain `message` node with `next: satisfied`) —
+            # merge into that node's bubble instead of opening a visually separate
+            # second response box. If it's empty, this end node is the sole output
+            # of the turn (e.g. resumed after a quick-reply interrupt) and renders
+            # its own bubble as before.
+            base_activities = list(state.pending_activities)
+            merge_target = base_activities[-1] if base_activities else None
+
             if prompt:
                 text = render(prompt.get("text", ""), ctx)
                 if text:
-                    activities.append(
-                        Activity.markdown(text).model_dump(exclude_none=True)
-                    )
+                    if merge_target and merge_target.get("type") == "markdown":
+                        prior_text = merge_target.get("content", "").rstrip()
+                        merge_target["content"] = f"{prior_text}\n\n{text}"
+                    else:
+                        activities.append(
+                            Activity.markdown(text).model_dump(exclude_none=True)
+                        )
             if action_button_raw:
                 btn_label = render(action_button_raw.get("label", ""), ctx)
                 btn_url   = render(action_button_raw.get("url", ""), ctx)
@@ -62,7 +77,7 @@ class EndNode(NodeHandler):
             )
 
             return {
-                "pending_activities": state.pending_activities + activities,
+                "pending_activities": base_activities + activities,
                 "current_node": cfg["id"],
                 "status": status,
             }

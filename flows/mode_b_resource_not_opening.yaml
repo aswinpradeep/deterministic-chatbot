@@ -155,27 +155,52 @@ nodes:
       search:     { enabled: true, placeholder: "Search your enrolled courses..." }
       pagination: { enabled: true, page_size: 10 }
       cache_ttl:  300
+      empty_message: |
+        You do not have any enrolled courses or programs at the moment.
+
+        Please enrol in a course on the iGOT Karmayogi portal and try again.
       on_empty:   no_enrolled_courses_found
     next: api_fetch_hierarchy
  
   # Step 2: Fetch hierarchy to get resource IDs (Leaf Nodes)
+  # Uses the PRIVATE hierarchy endpoint, not the public /api/content/v2/read/.
+  # The public endpoint returns 400 ERR_ACCESS_DENIED for Moderated courses
+  # (secureSettings block anonymous/public reads), which was silently sending
+  # every Moderated-course case straight to api_error_fallback -> auto-ticket,
+  # skipping resource selection entirely. The private endpoint has the
+  # elevated access needed to read Moderated content, and already returns a
+  # single flattened leafNodes[] covering nested CourseUnit resources too —
+  # no separate children fallback/recursion needed.
   - id: api_fetch_hierarchy
     type: api_call
     integration: karmayogi
     request:
       method: GET
-      url: "/api/content/v2/read/{{ ctx.collected.course_id }}"
+      url: "/api/private/content/v3/hierarchy/{{ ctx.collected.course_id }}?mode=edit"
     response_mapping:
-      # Try leafNodes first, fall back to children identifiers if it's a program
       - from: "$.content.leafNodes"
         to: collected.all_resource_ids
-      - from: "$.content.children" # Use a separate field for children
+      - from: "$.content.children" # Defensive fallback if leafNodes is ever absent
         to: collected.all_child_ids
         transform: extract_child_course_ids
-    on_success: shared_pick_resource
+    on_success: branch_resource_ids_found
     on_error:
       any: api_error_fallback
- 
+
+  # Guard: /api/content/v1/search silently ignores an EMPTY identifier filter
+  # and returns unrelated content from across the whole platform instead of
+  # erroring or returning nothing. Never let that happen — if the hierarchy
+  # call above found no leaf/child IDs at all, go straight to the "no
+  # resources" message instead of searching with an empty filter.
+  - id: branch_resource_ids_found
+    type: branch
+    rules:
+      - if: >
+          (ctx.collected.all_resource_ids != None and len(ctx.collected.all_resource_ids) > 0)
+          or (ctx.collected.all_child_ids != None and len(ctx.collected.all_child_ids) > 0)
+        then: shared_pick_resource
+    default: no_resources_found
+
   # Step 3: Select the resource from a searchable list
   - id: shared_pick_resource
     type: collect
@@ -316,11 +341,19 @@ nodes:
 
   # Fallback for API failures
   - id: api_error_fallback
-    type: message
+    type: ticket_confirm
     prompt:
       text: |
-        I'm having trouble fetching your course or resource details right now. Please try again later or share the details so I can raise a ticket.
-    next: resource_auto_ticket
+        I'm having trouble fetching your course or resource details right now.
+
+        **Summary of Request:**
+        You reported a resource/content opening issue and it could not be resolved through self-service steps. You would like us to investigate this issue further.
+
+        • **Course:** {{ ctx.collected.course_name }}
+
+        Please review the details above and confirm whether they are correct.
+    on_confirm: resource_auto_ticket
+    on_cancel: satisfied
 
   # ===========================================================================
   # CASE 2B: SCORM / Other Formats
@@ -399,6 +432,19 @@ nodes:
     prompt:
       text: |
         We couldn't find any resources in the selected course.
+    next: no_resources_found_ticket_confirm
 
-        If you believe this is incorrect, please try again after some time or raise a support ticket.
-    next: satisfied
+  - id: no_resources_found_ticket_confirm
+    type: ticket_confirm
+    prompt:
+      text: |
+        This needs further investigation from our support team.
+
+        **Summary of Request:**
+        You reported a resource/content opening issue and no resources could be found in the selected course. You would like us to investigate this issue further.
+
+        • **Course:** {{ ctx.collected.course_name }}
+
+        Please review the details above and confirm whether they are correct.
+    on_confirm: resource_auto_ticket
+    on_cancel: satisfied

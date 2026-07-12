@@ -8,7 +8,7 @@
 #   - Fetch CBP training plan via CBP Plan API
 #   - If plan exists: show APAR / Non-APAR summary table + navigation steps
 #   - Allow user to request full course list (APAR or Non-APAR)
-#   - If no plan found: escalate
+#   - If no plan found: check org mapping / profile verification, then MDO/YP contact fallback (no ticket)
 #
 # Integration: karmayogi  (Authorization: Bearer KARMAYOGI_API_KEY)
 #
@@ -193,14 +193,12 @@ nodes:
       - { id: non_apar, label: "📘 View Non-APAR Courses" }
       - { id: ec1,      label: "❓ A specific course is missing" }
       - { id: ec2,      label: "❓ Wrong CBP/Course" }
-      - { id: ok,       label: "✅ Understood, thank you" }
     disable_input: true
     on_reply:
       apar:     show_apar_courses
       non_apar: show_non_apar_courses
       ec1:      ec1_ask_course_name
       ec2:      ec2_fetch_profile
-      ok:       satisfied
 
   # ===========================================================================
   # Step 5 — Confirm course type  (SOP Step 2.3.1)
@@ -319,7 +317,7 @@ nodes:
       - { from: "$.response.profileDetails.centralDeputation",               to: collected.central_deputation }
     on_success: branch_on_org_mapping
     on_error:
-      any: offer_ticket_no_plan
+      any: org_details_unavailable
     timeout_ms: 5000
 
   # ===========================================================================
@@ -591,7 +589,7 @@ nodes:
 
         Kindly update the required details and recheck the APAR section after some time.
 
-        Please feel free to reach out if you need any further assistance.
+        
 
         Thank you,
         **Karmayogi Bharat Support Team**
@@ -619,13 +617,13 @@ nodes:
     prompt:
       text: |
         {% if ctx.collected.cbp_total_count == 0 or ctx.collected.cbp_total_count == None %}
-        We checked, and no CBP/training plan is currently assigned to your profile.
+        Upon checking, we found that no CBP/training plan is currently assigned to your profile.
         Training plans and courses are assigned by the concerned authority.
-        Please connect with the contact details below for further assistance:
+        Kindly connect with the contact details below for further assistance:
         {% elif ctx.collected.ec1_course_name %}
-        We checked, and the requested course isn't currently available in your assigned training/CBP plan.
+        Upon checking, we found that the requested course is currently not available in your assigned training/CBP plan.
         Training plans and course assignments are managed by the concerned authority.
-        Please connect with the contact details below for further assistance regarding course allocation/addition:
+        We request you to kindly connect with the contact details below for further assistance regarding course allocation/addition:
         {% else %}
         As training plans/courses are managed and assigned by the concerned authority, please connect with the contact details below for further assistance:
         {% endif %}
@@ -639,13 +637,13 @@ nodes:
     prompt:
       text: |
         {% if ctx.collected.cbp_total_count == 0 or ctx.collected.cbp_total_count == None %}
-        We checked, and no CBP/training plan is currently assigned to your profile.
+        Upon checking, we found that no CBP/training plan is currently assigned to your profile.
         Training plans and courses are assigned by the concerned authority.
-        Please connect with the contact details below for further assistance:
+        Kindly connect with the contact details below for further assistance:
         {% elif ctx.collected.ec1_course_name %}
-        We checked, and the requested course isn't currently available in your assigned training/CBP plan.
+        Upon checking, we found that the requested course is currently not available in your assigned training/CBP plan.
         Training plans and course assignments are managed by the concerned authority.
-        Please connect with the contact details below for further assistance regarding course allocation/addition:
+        We request you to kindly connect with the contact details below for further assistance regarding course allocation/addition:
         {% else %}
         As training plans/courses are managed and assigned by the concerned authority, please connect with the contact details below for further assistance:
         {% endif %}
@@ -658,51 +656,31 @@ nodes:
     next: satisfied
 
   - id: yp_not_found
-    type: message
-    prompt:
-      text: |
-        We couldn't retrieve the MDO Admin or YP/AM contact details for your organization at this time.
-        Please reach out to your concerned authority for further assistance.
-    next: satisfied
-
-
-
-  # ===========================================================================
-  # Reached only when validate_user_org API itself errors out
-  # ===========================================================================
-  - id: offer_ticket_no_plan
-    type: message
-    prompt:
-      text: |
-        We checked, and couldn't find an active training plan assigned to your profile.
-
-        This could mean:
-        - A training plan has not yet been assigned by your MDO, or
-        - There may be a sync delay — please check again after some time.
-
-        Would you like us to raise a support ticket for further investigation?
-    quick_replies:
-      - { id: yes, label: "✅ Yes, please raise a ticket" }
-      - { id: no,  label: "❌ No, thank you" }
-    disable_input: true
-    on_reply:
-      yes: apar_confirm_ticket
-      no:  satisfied
-
-  - id: apar_confirm_ticket
     type: ticket_confirm
     prompt:
       text: |
-        **Issue Identified:** APAR Training Plan Not Visible
+        We couldn't retrieve the MDO Admin or YP/AM contact details for your organization at this time.
 
-        **Summary of Request:**
-        You reported that your APAR training plan / courses are not visible on the platform. You would like us to investigate this issue further.
-
-        Please review the details above and confirm whether they are correct.
-    on_confirm: raise_ticket
+        This needs further investigation from our support team. Would you like us to create a support ticket for this issue?
+    on_confirm: yp_not_found_ticket_summary
     on_cancel: satisfied
 
-  - id: raise_ticket
+  - id: yp_not_found_ticket_summary
+    type: ticket_confirm
+    prompt:
+      text: |
+        **Issue Identified:** Training Plan / APAR Not Visible — No MDO Admin or YP Contact Found
+
+        **Summary of Request:**
+        Your training plan/APAR courses are not visible, and we could not locate an MDO Admin or YP/AM contact for your organization to help resolve this. You would like us to investigate this further.
+
+        • **Organization:** {{ ctx.collected.org_name or ctx.collected.org_channel | default('Not identified') }}
+
+        Please review the details above and confirm whether they are correct.
+    on_confirm: yp_not_found_raise_ticket
+    on_cancel: satisfied
+
+  - id: yp_not_found_raise_ticket
     type: transfer_llm
     auto_raise: silent
     llm_context:
@@ -711,19 +689,29 @@ nodes:
       include_flow_meta: true
     llm_directives:
       objective: |
-        The user reports that their APAR training plan / courses are not visible on the iGOT platform.
-        Generate a support ticket.
-        Subject: "Training Plan / APAR Courses Not Visible"
-        Description: The CBP plan API returned no data for this user. Include user email ({{ ctx.collected.user_email }}) and rootOrgId ({{ ctx.collected.root_org_id }}).
+        The user's training plan/APAR courses are not visible, and no MDO Admin or YP/AM
+        contact could be located for their organization either — so the user has no
+        self-service path to get this resolved.
+        Generate a Zoho support ticket so the support team can manually identify the
+        correct contact and resolve the visibility issue.
+        Subject: "Training Plan / APAR Not Visible — No Admin or YP Contact Found"
+        Description: include the organization/channel and note that neither an MDO Admin
+        nor a YP/AM contact could be found.
       priority_override: P3
-    on_complete: ticket_confirmed
-    on_restart: fetch_user_profile
+    on_complete: confirm_ticket
 
-  - id: ticket_confirmed
+
+
+  # ===========================================================================
+  # Reached only when validate_user_org API itself errors out
+  # ===========================================================================
+  - id: org_details_unavailable
     type: message
     prompt:
       text: |
-        ✅ A support ticket has been raised and the details have been shared with the concerned team for further investigation.
+        We couldn't verify your organization / MDO details at this time.
+
+        Please reach out to your MDO Admin or concerned authority for further assistance regarding your training plan.
     next: satisfied
 
   # ===========================================================================
@@ -853,7 +841,7 @@ nodes:
     type: message
     prompt:
       text: |
-        We checked, and the mentioned course is already part of your training plan and has been successfully completed.
+        Upon checking, we found that the mentioned course is already part of your training plan and has been successfully completed.
 
         To view the completed course, please follow the steps below:
 
@@ -891,7 +879,7 @@ nodes:
     type: message
     prompt:
       text: |
-        We checked, and the course '{{ ctx.collected.ec1_course_name }}' is already available in your assigned training plan.
+        Upon checking, we found that the course '{{ ctx.collected.ec1_course_name }}' is already available in your assigned training plan.
 
         To view the mentioned courses, please follow the steps below:
 

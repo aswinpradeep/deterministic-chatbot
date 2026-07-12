@@ -46,24 +46,11 @@ nodes:
     type: message
     prompt:
       text: |
-        The course progress may take some time to update. You will be eligible to rate the course only after the progress is fully updated.
-        
-        Please check again after **4–5 hours**.
-        
-        > ℹ️ **Please note that rating the course is not mandatory for certificate generation.**
-        
-        > Once you have completed the course, you may revisit after 4–5 hours, navigate to **My Learning**, select the course, complete the survey/feedback, and download your certificate.
-    next: ask_follow_up
+        Upon checking, the course progress may take some time to update. You will be eligible to rate the course only after the progress is fully updated.
 
-  - id: ask_follow_up
-    type: message
-    prompt:
-      text: "Is there anything else I can help you with?"
-    quick_replies:
-      - { id: ok, label: "✅ Understood, thank you" }
-    on_reply:
-      ok: satisfied
+        We kindly request you to check again after 4–5 hours.
 
-  - id: satisfied
-    type: end
-    outcome: self_served
+        Please note that rating the course is not mandatory for certificate generation.
+
+        Once you have completed the course, you may revisit after 4–5 hours, navigate to My Learning, select the course, complete the survey/feedback, and download your certificate.
+    next: satisfied

@@ -82,10 +82,10 @@ nodes:
         Please follow the steps below and check if the issue is resolved:
     steps:
       - "Long press the application icon."
-      - "Click on **App Info**."
-      - "Select **Storage & Cache**."
-      - "Click on **Clear Cache**."
-      - "Click on **Clear Data / Clear Storage**."
+      - "Click on App Info."
+      - "Select Storage & Cache."
+      - "Click on Clear Cache."
+      - "Click on Clear Data / Clear Storage."
       - "Relaunch the application and try again."
     follow_up:
       text: "Has the issue been resolved after following these steps?"
@@ -131,18 +131,15 @@ nodes:
     on_cancel: satisfied
 
   - id: android_unsupported_version
-    type: resolution
+    type: end
+    outcome: self_served
     prompt:
       text: |
-        We checked, and your device doesn't meet the minimum Android version required to support the application.
+        Upon checking, your device does not meet the minimum Android version required to support the application.
 
-        Please update your device to **Android 8 or above** and try again.
-    steps:
-      - "Go to your device **Settings**."
-      - "Navigate to **Software Update** or **System Update**."
-      - "Install the latest available Android update."
-      - "Relaunch the iGOT Karmayogi app after updating."
-    next: satisfied
+        Please update your device to a supported Android version and try again.
+
+        I hope this helps. Please let me know if you need any further assistance.
 
   - id: android_raise_ticket
     type: transfer_llm
@@ -158,17 +155,8 @@ nodes:
         Subject: "Auto Logout / App Crash – Android"
         Description: Include device details — Device Name: {{ ctx.collected.device_name }}, Device Model: {{ ctx.collected.device_model }}, Android Version: {{ ctx.collected.android_version }}. Note that the issue persisted after clearing the app cache and data.
       priority_override: P3
-    on_complete: android_ticket_confirmed
+    on_complete: confirm_ticket
     on_restart: ask_device_type
-
-  - id: android_ticket_confirmed
-    type: message
-    prompt:
-      text: |
-        We understand the issue persists even after clearing the application cache and data.
-
-        ✅ A support ticket has been raised and the details have been shared with the concerned team for further investigation.
-    next: satisfied
 
   # ===========================================================================
   # 3. iOS Path
@@ -208,18 +196,15 @@ nodes:
     on_cancel: satisfied
 
   - id: ios_unsupported_version
-    type: resolution
+    type: end
+    outcome: self_served
     prompt:
       text: |
-        We checked, and your device doesn't meet the minimum iOS version required to support the application.
+        Upon checking, your device does not meet the minimum iOS version required to support the application.
 
-        The application supports **iOS 15.6 and above** — please update your device and try again.
-    steps:
-      - "Go to your iPhone **Settings**."
-      - "Tap **General** → **Software Update**."
-      - "Install the latest available iOS update."
-      - "Relaunch the iGOT Karmayogi app after updating."
-    next: satisfied
+        The application supports iOS version 15.6 and above. Kindly update your device and try again.
+
+        I hope this helps. Please let me know if you need any further assistance.
 
   - id: ios_raise_ticket
     type: transfer_llm
@@ -235,14 +220,14 @@ nodes:
         Subject: "Auto Logout / App Crash – iOS"
         Description: Include device details — Device Name: {{ ctx.collected.device_name }}, Device Model: {{ ctx.collected.device_model }}, iOS Version: {{ ctx.collected.ios_version }}.
       priority_override: P3
-    on_complete: ios_ticket_confirmed
+    on_complete: confirm_ticket
     on_restart: ask_device_type
 
-  - id: ios_ticket_confirmed
-    type: message
+  # ===========================================================================
+  # 4. Local override — shorter closing message for this flow only
+  # ===========================================================================
+  - id: satisfied
+    type: end
+    outcome: self_served
     prompt:
-      text: |
-        We understand that you're facing issues with the application.
-
-        ✅ A support ticket has been raised and the details have been shared with the concerned team for further investigation.
-    next: satisfied
+      text: "I hope this helps. Please let me know if you need any further assistance."

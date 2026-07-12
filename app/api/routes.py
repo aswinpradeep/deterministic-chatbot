@@ -285,52 +285,65 @@ async def submit_turn(
                 current_node=None,
             )
 
-        # Valid category — show its flows and advance state
-        log.info(
-            "[activity] event=category_selected  session=%s  user=%s  category=%r",
-            sid, session["user_id_hash"], category,
-        )
         session["selected_category"] = category
-        session["status"] = "selecting_topic"
 
-        _lf_tid_cat: str | None = None
-        _lf_oid_cat: str | None = None
-        with tracing.turn_trace(
-            user_id=user_id,
-            session_id=sid,
-            trace_name=f"category-selected",
-            tags=[session["channel"], session["language"]],
-            trace_id=session.get("_lf_trace_id"),
-            parent_observation_id=session.get("_lf_obs_id"),
-            category=category,
-            channel=session["channel"],
-        ):
-            _lf_tid_cat, _lf_oid_cat = tracing.get_current_span_ids()
-            tracing.set_span_io(
-                input={"user": f"Selected category: {category}"},
-                output={"bot": "Sub-flow menu shown", "flow_options": [qr.label for qr in sub_flows]},
+        if len(sub_flows) == 1:
+            # Only one flow under this category (e.g. "Application Crashing / Not
+            # Loading" → "Auto logout / App crash") — skip the redundant submenu
+            # click and go straight into that flow. Falls through to the
+            # `selecting_topic` phase below by pretending the flow was chosen.
+            log.info(
+                "[activity] event=category_selected_single_flow  session=%s  user=%s  category=%r  flow=%s",
+                sid, session["user_id_hash"], category, sub_flows[0].id,
             )
+            session["status"] = "selecting_topic"
+            body = body.model_copy(update={"choice_id": sub_flows[0].id})
+        else:
+            # Valid category with multiple flows — show its flows and advance state
+            log.info(
+                "[activity] event=category_selected  session=%s  user=%s  category=%r",
+                sid, session["user_id_hash"], category,
+            )
+            session["status"] = "selecting_topic"
 
-        if _lf_tid_cat:
-            session["_lf_trace_id"] = _lf_tid_cat
-        if _lf_oid_cat:
-            session["_lf_obs_id"] = _lf_oid_cat
+            _lf_tid_cat: str | None = None
+            _lf_oid_cat: str | None = None
+            with tracing.turn_trace(
+                user_id=user_id,
+                session_id=sid,
+                trace_name=f"category-selected",
+                tags=[session["channel"], session["language"]],
+                trace_id=session.get("_lf_trace_id"),
+                parent_observation_id=session.get("_lf_obs_id"),
+                category=category,
+                channel=session["channel"],
+            ):
+                _lf_tid_cat, _lf_oid_cat = tracing.get_current_span_ids()
+                tracing.set_span_io(
+                    input={"user": f"Selected category: {category}"},
+                    output={"bot": "Sub-flow menu shown", "flow_options": [qr.label for qr in sub_flows]},
+                )
 
-        activities = [
-            Activity.markdown(
-                _sys(request, "select_issue",
-                     "Please choose the specific issue you're facing:")
-            ).model_dump(exclude_none=True),
-            Activity.quick_replies(choices=sub_flows).model_dump(exclude_none=True),
-        ]
-        activities = await _translate_activities(activities, lang, translation_svc)
-        return TurnResponse(
-            session_id=session_id,
-            activities=activities,
-            status=FlowStatus.AWAITING_USER.value,
-            flow_id=None,
-            current_node=None,
-        )
+            if _lf_tid_cat:
+                session["_lf_trace_id"] = _lf_tid_cat
+            if _lf_oid_cat:
+                session["_lf_obs_id"] = _lf_oid_cat
+
+            activities = [
+                Activity.markdown(
+                    _sys(request, "select_issue",
+                         "Please choose the specific issue you're facing:")
+                ).model_dump(exclude_none=True),
+                Activity.quick_replies(choices=sub_flows).model_dump(exclude_none=True),
+            ]
+            activities = await _translate_activities(activities, lang, translation_svc)
+            return TurnResponse(
+                session_id=session_id,
+                activities=activities,
+                status=FlowStatus.AWAITING_USER.value,
+                flow_id=None,
+                current_node=None,
+            )
 
     # ── Phase: topic selection (before any flow is started) ──────────────────
     if session["status"] == "selecting_topic":
@@ -456,10 +469,14 @@ async def submit_turn(
                 tracing.set_span_io(input={"user": f"Selected topic: {_topic_label}"})
                 result = await graph.ainvoke(state_dict, lg_config)
                 result_status = result.get("status", "active")
-                _bot_reply = _first_bot_text(result.get("pending_activities") or [])
+                _pending = result.get("pending_activities") or []
                 tracing.set_span_io(
                     input={"user": f"Selected topic: {_topic_label}"},
-                    output={"bot": _bot_reply, "next_node": result.get("current_node"), "status": str(result_status)},
+                    output={
+                        "activities": _activities_for_trace(_pending),
+                        "next_node": result.get("current_node"),
+                        "status": str(result_status),
+                    },
                 )
         except Exception as exc:  # noqa: BLE001
             log.exception("Flow start error for %s", flow_id)
@@ -644,9 +661,9 @@ async def submit_turn(
             await graph.aupdate_state(lg_config, update)
             result = await graph.ainvoke(None, lg_config)
             result_status = result.get("status", "active")
-            _bot_reply = _first_bot_text(result.get("pending_activities") or [])
+            _pending = result.get("pending_activities") or []
             _out: dict = {
-                "bot": _bot_reply,
+                "activities": _activities_for_trace(_pending),
                 "next_node": result.get("current_node"),
                 "status": str(result_status),
             }
@@ -884,6 +901,48 @@ def _first_bot_text(activities: list[dict]) -> str:
         if isinstance(text, str) and text.strip():
             return text.strip()[:200]
     return f"[{len(activities)} activities]"
+
+
+def _activities_for_trace(activities: list[dict]) -> list[dict]:
+    """Build a structured, non-PII summary of all bot activities for Langfuse.
+
+    Each activity becomes a compact dict showing type + key display fields so
+    the Langfuse Output tab reads like a step-by-step trace of what the bot
+    presented to the user.
+    """
+    summary = []
+    for act in activities:
+        atype = act.get("type", "unknown")
+        if atype in ("text", "markdown"):
+            summary.append({"type": atype, "content": (act.get("content") or "")[:400]})
+        elif atype == "quick_replies":
+            summary.append({
+                "type": "quick_replies",
+                "options": [c.get("label") for c in (act.get("choices") or [])],
+            })
+        elif atype in ("picker", "nested_picker"):
+            summary.append({
+                "type": atype,
+                "placeholder": act.get("placeholder"),
+                "title": act.get("title"),
+                "total_items": act.get("total_items"),
+            })
+        elif atype == "input":
+            summary.append({
+                "type": "input",
+                "field": act.get("input_id"),
+                "placeholder": act.get("input_placeholder"),
+            })
+        elif atype == "action_button":
+            summary.append({
+                "type": "action_button",
+                "label": act.get("label"),
+            })
+        elif atype == "end":
+            summary.append({"type": "end", "outcome": act.get("outcome")})
+        else:
+            summary.append({"type": atype})
+    return summary
 
 
 def _user_input_label(

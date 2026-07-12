@@ -50,9 +50,13 @@ entry_node: fetch_transfer_status
 imports:
   - _terminal
   - fragment: _yp_lookup
+  - fragment: _zoho_ticket
+    with:
+      cf_category:     profile
+      cf_sub_category: access_revoked
+      cf_flow_id:      ACCESS_REVOKED
 
 nodes:
-
 
   # ===========================================================================
   # 2. Verify Transfer Request Status (SOP Step 2.1: Private User Search API)
@@ -87,7 +91,8 @@ nodes:
       - { from: "$.response.content[0].channel",                          to: collected.user_channel }
       - { from: "$.response.content[0].channel",                          to: collected.org_channel }
       - { from: "$.response.content[0].rootOrgId",                        to: collected.root_org_id }
-      - { from: "$.response.content[0].profileStatus",                    to: collected.profile_status }
+      # Verification status — nested under profileDetails, not top-level
+      - { from: "$.response.content[0].profileDetails.profileStatus",      to: collected.profile_status }
     on_success: branch_on_transfer_status
     on_error:
       any: escalate_api_error
@@ -96,11 +101,22 @@ nodes:
     type: branch
     rules:
       - { if: "ctx.collected.user_found_count == 0", then: user_not_found_fallback }
+      # "Not My User" check — if the account is already verified, access was
+      # never actually revoked; skip the transfer-request flow entirely.
+      - { if: "(ctx.collected.profile_status or '').upper() == 'VERIFIED'",
+          then: account_already_verified }
       # SOP Step 2.2: If Transfer Request is Already Raised
       - { if: "ctx.collected.wf_transfer_id != None and ctx.collected.wf_transfer_id != ''",
           then: fetch_org_details }
     # SOP Step 4: If Transfer Request is NOT Raised
     default: guide_raise_transfer
+
+  - id: account_already_verified
+    type: message
+    prompt:
+      text: |
+        We checked your profile, and the account is already verified with **{{ ctx.collected.profile_org_name or ctx.collected.org_channel or "your organization" }}**.
+    next: satisfied
 
   # Fetch organization details using org API (in case orgName is missing from transfer request)
   - id: fetch_org_details
@@ -256,27 +272,34 @@ nodes:
         - { id: greyed, label: "Button is disabled" }
         - { id: no_org, label: "🔍 Can't find my organisation" }
     on_reply:
-      done: satisfied
+      done: guide_raise_transfer_done
       # SOP Step 6.1: Transfer Request Button Disabled
       greyed: guide_button_disabled
       # SOP Step 6.2: User Unable to Find Organization in Dropdown
       no_org: ask_org_tier
-      
+
+  - id: guide_raise_transfer_done
+    type: end
+    outcome: self_served
+    prompt:
+      text: |
+        I hope this helps. Please let me know if you need any further assistance.
+
   # SOP 6.1: Resolution for disabled button
   - id: guide_button_disabled
-    type: resolution
+    type: message
     prompt:
       text: |
         **"Make Transfer Request" Button is Disabled**
 
         This is usually because you have a pending request under your **Primary Details** section.
-    steps:
-      - "Log in to iGOT Karmayogi."
-      - "Go to **Profile** (Top Right Corner)."
-      - "Open the **Primary Details** section."
-      - "Click on **Withdraw Request** to cancel the pending request."
-      - "Once withdrawn, the 'Make Transfer Request' option will become enabled again."
-      - "Submit a fresh transfer request with the correct organization details."
+
+        1. Log in to iGOT Karmayogi.
+        2. Go to **Profile** (Top Right Corner).
+        3. Open the **Primary Details** section.
+        4. Click on **Withdraw Request** to cancel the pending request.
+        5. Once withdrawn, the 'Make Transfer Request' option will become enabled again.
+        6. Submit a fresh transfer request with the correct organization details.
     next: satisfied
 
   # Ask user if they are under Central Ministry or State Government
@@ -664,12 +687,46 @@ nodes:
       - "Raise a transfer request post-organization creation."
     next: satisfied
 
+  # No MDO Admin AND no YP/SPOC could be identified — raise a ticket for manual
+  # resolution instead of leaving the user with no path forward (SOP §3 fallback).
+  # Matches the ticket_confirm → transfer_llm(auto_raise:silent) → confirm_ticket
+  # convention used by every other ticket-raising path in this codebase, so the
+  # explanation and the final "ticket submitted" message land in separate turns.
   - id: yp_not_found
-    type: message
+    type: ticket_confirm
     prompt:
       text: |
-        We couldn't find the SPOC details for your organization in our current records.
-    next: satisfied
+        **Issue Identified:** Access Revoked — No MDO/SPOC Contact Found
+
+        **Summary of Request:**
+        You reported that your access was revoked and you need help raising a transfer request, but no MDO Admin or YP/SPOC contact could be located for your organization. You would like us to investigate this further.
+
+        • **Organization/Ministry/State:** {{ ctx.collected.dropdown_org_name or ctx.collected.transfer_org_name or ctx.collected.selected_parent_name or ctx.collected.fetched_org_name or 'Not identified' }}
+
+        Please review the details above and confirm whether they are correct.
+    on_confirm: raise_ticket_no_contact
+    on_cancel: satisfied
+
+  - id: raise_ticket_no_contact
+    type: transfer_llm
+    auto_raise: silent
+    llm_context:
+      include_messages:  true
+      include_collected: true
+      include_flow_meta: true
+    llm_directives:
+      objective: |
+        The user's platform access was revoked (flagged "Not My User") and no MDO Admin
+        or YP/SPOC contact could be located for their organization/ministry/state, so the
+        user has no self-service path to restore access.
+        Generate a Zoho support ticket so the support team can manually identify the
+        correct contact and help restore the user's access.
+        Subject: "Access Revoked — No MDO/SPOC Contact Found"
+        Description: include any organization/ministry/state/department names collected
+        so far (transfer_org_name, dropdown_org_name, selected_parent_name,
+        dropdown_dept_name, fetched_org_name) and the user's channel/root org info.
+      priority_override: P3
+    on_complete: confirm_ticket
 
   # ===========================================================================
   # 5. Escalation & Terminal
@@ -682,12 +739,3 @@ nodes:
 
         Please try again after some time — thank you for your patience.
     next: satisfied
-
-
-
-  - id: satisfied
-    type: end
-    outcome: self_served
-    prompt:
-      text: |
-        Glad I could help.

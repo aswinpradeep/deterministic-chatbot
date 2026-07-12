@@ -24,7 +24,7 @@
 # =============================================================================
 
 flow_id: LEARNING_HOURS
-flow_type: deterministic
+flow_type: deterministic_with_llm_fallback
 version: 2
 
 metadata:
@@ -32,7 +32,7 @@ metadata:
   classification:   Service Request
   default_priority: P3
   default_severity: Sev 3
-  menu_label:       "🔄 Learning  Hours not Reflecting"
+  menu_label:       "🔄 Learning Hours not Reflecting"
   menu_group:       "Recognition & Engagement"
   menu_group_order: 4
   menu_order:       12
@@ -61,6 +61,11 @@ imports:
   - _terminal
   - fragment: _mdo_admin_lookup
   - fragment: _yp_lookup
+  - fragment: _zoho_ticket
+    with:
+      cf_category:     platform
+      cf_sub_category: learning_hours
+      cf_flow_id:      LEARNING_HOURS
 
 nodes:
 
@@ -92,8 +97,7 @@ nodes:
   # SECTION 2 — Shiksha Path (static guidance, no API)
   # ===========================================================================
   - id: shiksha_path_info
-    type: end
-    outcome: self_served
+    type: message
     prompt:
       text: |
         **Shiksha Path** is managed by the **Directorate of Training, CBDT**.
@@ -104,8 +108,7 @@ nodes:
 
         **Support Contact**
         **Email ID:** aed4.training@incometax.gov.in
-
-        We hope your concern gets resolved soon. Thank you for reaching out! 🙏
+    next: satisfied
 
   # ===========================================================================
   # SECTION 1 — eHRMS
@@ -203,13 +206,13 @@ nodes:
     next: ehrms_support_referral_end
 
   - id: ehrms_support_referral_end
-    type: end
-    outcome: self_served
+    type: message
     prompt:
       text: |
         Thank you for sharing the details.
 
         Please contact the **eHRMS support team** with the above information for further assistance. They will investigate why the learning progress is not reflecting in your eHRMS account.
+    next: satisfied
 
   # ===========================================================================
   # MDO lookup — injected from _shared/_mdo_admin_lookup.yaml
@@ -254,7 +257,7 @@ nodes:
         **MDO Name:** {{ ctx.collected.mdo_admin_name | default('—') }}
         **MDO Email ID:** {{ ctx.collected.mdo_admin_email | default('—') }}
 
-        > ℹ️ Once the eHRMS ID is updated, it may take up to **24 hours** for the learning progress to reflect in eHRMS.
+        Once the eHRMS ID is updated, it may take up to **24 hours** for the learning progress to reflect in eHRMS.
     next: satisfied
 
   # Step 1.4 — eHRMS ID present but External System Name missing
@@ -272,21 +275,69 @@ nodes:
         **MDO Name:** {{ ctx.collected.mdo_admin_name | default('—') }}
         **MDO Email ID:** {{ ctx.collected.mdo_admin_email | default('—') }}
 
-        > ℹ️ Once the External System Name is updated, it may take up to **24 hours** for the learning progress to reflect in eHRMS.
+        Once the External System Name is updated, it may take up to **24 hours** for the learning progress to reflect in eHRMS.
     next: satisfied
 
-  # No MDO found in the organization (generic — used by eHRMS and SPARROW paths)
+  # No MDO found in the organization (generic — used by eHRMS and SPARROW paths).
+  # Raise a ticket instead of a dead end — same ticket_confirm →
+  # transfer_llm(auto_raise:silent) → confirm_ticket pattern as access_revoked.yaml.
   - id: mdo_not_found_fallback
-    type: message
+    type: ticket_confirm
     prompt:
       text: |
-        We checked, and couldn't find an MDO Admin mapped to your organization (**{{ ctx.collected.org_channel | default('your organization') }}**).
+        **Issue Identified:** Learning Hours Not Reflecting — No MDO Admin Mapped to Organization
 
-        Please try again after some time.
-    next: satisfied
+        **Summary of Request:**
+        You reported that your learning progress is not reflecting, but no MDO Admin could be located for your organization to help resolve this. You would like us to investigate this further.
 
-  # MDO API error
+        • **Organization:** {{ ctx.collected.org_channel | default('Not identified') }}
+
+        Please review the details above and confirm whether they are correct.
+    on_confirm: raise_ticket_no_mdo
+    on_cancel: satisfied
+
+  - id: raise_ticket_no_mdo
+    type: transfer_llm
+    auto_raise: silent
+    llm_context:
+      include_messages:  true
+      include_collected: true
+      include_flow_meta: true
+    llm_directives:
+      objective: |
+        The user's learning progress is not reflecting in an external system (eHRMS or
+        SPARROW), and no MDO Admin could be located for their organization, so the user
+        has no self-service path to get the required profile fields updated.
+        Generate a Zoho support ticket so the support team can manually identify the
+        correct contact and resolve the mapping/assignment issue.
+        Subject: "Learning Hours Not Reflecting — No MDO Admin Found"
+        Description: include the organization/channel, external system (eHRMS/SPARROW),
+        and eHRMS ID / External System Name status if known.
+      priority_override: P3
+    on_complete: confirm_ticket
+
+  # MDO API error — eHRMS raises a support ticket instead of dead-ending;
+  # SPARROW/APAR keeps the original retry message unchanged (same shared
+  # lookup_mdo_admin node is used by both sections, so the split happens
+  # here based on which section is actually active).
   - id: mdo_api_error
+    type: branch
+    rules:
+      - if: "ctx.collected.external_system == 'EHRMS'"
+        then: mdo_api_error_ehrms_ticket
+    default: mdo_api_error_generic
+
+  - id: mdo_api_error_ehrms_ticket
+    type: ticket_confirm
+    prompt:
+      text: |
+        We ran into an issue while fetching MDO details for your organization.
+
+        This needs further investigation from our support team. Would you like us to create a support ticket for this issue?
+    on_confirm: raise_ticket_no_mdo
+    on_cancel: satisfied
+
+  - id: mdo_api_error_generic
     type: message
     prompt:
       text: |
@@ -309,7 +360,7 @@ nodes:
         **Contact Number:** {{ ctx.collected.yp_mobile }}
         {%- endif %}
 
-        > ℹ️ Only APAR-assigned and successfully completed courses/assessments are reflected in SPARROW/APAR.
+        Only APAR-assigned and successfully completed courses/assessments are reflected in SPARROW/APAR.
     next: satisfied
 
   - id: yp_not_found
@@ -414,9 +465,10 @@ nodes:
       - { from: "$.response.profileDetails.professionalDetails[0].designation",  to: collected.user_designation }
       - { from: "$.response.profileDetails.professionalDetails[0].group",        to: collected.user_group }
       - { from: "$.response.profileDetails.cadreDetails",                        to: collected.cadre_details }
-      - { from: "$.response.profileDetails.serviceDetails",                      to: collected.service_details }
-      - { from: "$.response.profileDetails.batch",                               to: collected.batch_details }
-      - { from: "$.response.profileDetails.centralDeputation",                   to: collected.central_deputation }
+      - { from: "$.response.profileDetails.cadreDetails.cadreName",               to: collected.cadre_name }
+      - { from: "$.response.profileDetails.cadreDetails.civilServiceName",        to: collected.service_details }
+      - { from: "$.response.profileDetails.cadreDetails.cadreBatch",              to: collected.batch_details }
+      - { from: "$.response.profileDetails.cadreDetails.isOnCentralDeputation",   to: collected.central_deputation }
     on_success: sp_branch_profile_status
     on_error:
       any: sp_api_error
@@ -519,13 +571,19 @@ nodes:
     type: api_call
     integration: karmayogi
     request:
-      method: GET
+      method: POST
       url: "/api/supportportal/admin/user/v2/assignedcourses/{{ ctx.collected.fetched_user_id }}"
+      headers:
+        x-authenticated-user-token: ""
+      body:
+        courseCategory: "Comprehensive Assessment Program"
     response_mapping:
-      - { from: "$.result.content", to: collected.assigned_courses }
+      - { from: "$.content", to: collected.assigned_courses }
     on_success: sp_branch_assigned_courses
     on_error:
-      any: lookup_mdo_admin
+      # A failed API call does NOT mean "not assigned" — say so honestly
+      # instead of falling through to the MDO/YP "no APAR/CAP" messaging.
+      any: sp_api_error
     timeout_ms: 8000
 
   # Branch: courses assigned → proceed to APAR check; empty → MDO lookup (Step 4.3)
@@ -552,7 +610,10 @@ nodes:
       - { from: "$.count",   to: collected.cbp_total_count }
     on_success: sp_branch_apar_assigned
     on_error:
-      any: lookup_mdo_admin
+      # Same reasoning as sp_fetch_assigned_courses — a technical failure here
+      # doesn't mean the CAP isn't assigned (we already confirmed it is, one
+      # API call ago); don't claim otherwise.
+      any: sp_api_error
     timeout_ms: 8000
 
   # Step 4.3 / 4.5 — Branch on APAR/CAP assignment
@@ -560,11 +621,30 @@ nodes:
     type: branch
     rules:
       - { if: "ctx.collected.cbp_total_count != None and ctx.collected.cbp_total_count > 0",
-          then: sp_fetch_enrollment }
+          then: sp_ask_cap_or_apar }
     # Step 4.3 — No assignment → MDO lookup
     default: lookup_mdo_admin
 
-  # Step 4.5 — APAR/CAP Assigned — check enrollment for course completion
+  # Step 4.4a (new) — Disambiguate: which category is the user asking about?
+  # Multiple CAP/APAR courses can be assigned at once, so we must not assume
+  # a single completed course before checking reflection status.
+  - id: sp_ask_cap_or_apar
+    type: message
+    prompt:
+      text: "Please choose the one you are facing the issue with:"
+    quick_replies:
+      - { id: CAP,  label: "📋 CAP" }
+      - { id: APAR, label: "📄 APAR" }
+    disable_input: true
+    on_reply:
+      save_to: collected.sp_category
+      CAP:  sp_fetch_enrollment
+      APAR: sp_fetch_enrollment
+
+  # Step 4.5 — APAR/CAP Assigned — check enrollment for course completion.
+  # Also builds the APAR nested Plan→Course picker (reusing the same
+  # nested_apar_courses transform the APAR-not-visible flow already uses)
+  # so sp_pick_apar_course below has data to show.
   - id: sp_fetch_enrollment
     type: api_call
     integration: karmayogi
@@ -577,40 +657,91 @@ nodes:
           status: ["Completed"]
     response_mapping:
       - { from: "$.courses", to: collected.sp_completed_courses }
-    on_success: sp_branch_cap_completion
+      - { from: "$.courses", to: collected.sp_apar_picker_list, transform: nested_apar_courses, transform_ctx_key: collected.all_courses }
+    on_success: sp_branch_category_picker
     on_error:
-      any: sp_branch_cap_completion
+      any: sp_branch_category_picker
     timeout_ms: 8000
 
-  # Branch: any APAR course completed with 100% → check time elapsed
-  # Otherwise → CAP not passed, guide reattempt (Step 4.5.1)
-  - id: sp_branch_cap_completion
+  # Step 4.5a (new) — Route to the right course picker for the chosen category
+  - id: sp_branch_category_picker
+    type: branch
+    rules:
+      - { if: "ctx.collected.sp_category == 'CAP'", then: sp_pick_cap_course }
+    default: sp_pick_apar_course
+
+  # Step 4.5b (new) — CAP course picker (assigned_courses already fetched
+  # earlier at sp_fetch_assigned_courses — no extra API call needed)
+  - id: sp_pick_cap_course
+    type: collect
+    prompt:
+      text: "You have multiple CAP courses. Please select the one you're asking about:"
+      title: "Select CAP Course"
+    field:
+      name: collected.sp_selected_course_id
+      type: select
+    dynamic_options:
+      source: context
+      context_key: collected.assigned_courses
+      response_mapping:
+        id_field: identifier
+        label_field: name
+        extra_fields:
+          - { from: name, to: collected.sp_selected_course_name }
+    next: sp_branch_selected_course_completed
+
+  # Step 4.5c (new) — APAR course picker (nested Plan→Course, same shape as
+  # mode_b_apar_not_visible.yaml's own picker)
+  - id: sp_pick_apar_course
+    type: collect
+    prompt:
+      text: "You have multiple APAR courses. Please select the one you're asking about:"
+      title: "Select APAR Course"
+    field:
+      name: collected.sp_selected_course_id
+      type: select
+    dynamic_options:
+      source: context
+      context_key: collected.sp_apar_picker_list
+      response_mapping:
+        id_field: courseId
+        label_field: courseName
+        extra_fields:
+          - { from: courseName, to: collected.sp_selected_course_name }
+    next: sp_branch_selected_course_completed
+
+  # Step 4.5d (new) — Is the SPECIFIC selected course actually completed?
+  # Same completion check as before, just scoped to the one course chosen
+  # instead of "any completed course at all".
+  - id: sp_branch_selected_course_completed
     type: branch
     rules:
       - if: >
           len([1 for c in (ctx.collected.sp_completed_courses or [])
-               if (c.get('completionPercentage') or 0) == 100]) > 0
+               if c.get('courseId') == ctx.collected.sp_selected_course_id
+               and (c.get('completionPercentage') or 0) == 100]) > 0
         then: sp_ask_time_elapsed
     default: sp_cap_guidance
 
-  # Step 4.5.1 — CAP assessment not passed
+  # Step 4.5.1 — CAP assessment not passed for the selected course.
+  # Per SOP, this is always "the CAP assessment" regardless of whether the
+  # user picked CAP or APAR as the category — it's a fixed, specific
+  # assessment, not something that varies by category.
   - id: sp_cap_guidance
-    type: end
-    outcome: self_served
+    type: message
     prompt:
       text: |
-        We checked, and found that your APAR courses have been assigned; however, the **CAP assessment** has not yet been passed.
+        We checked, and found that **{{ ctx.collected.sp_selected_course_name | default('this course') }}** has been assigned; however, the **CAP assessment** has not yet been passed.
 
-        Please reattempt and pass the **CAP assessment**. Reflection in SPARROW/APAR occurs only after successful completion of the required courses and assessment.
-
-        Thank you for reaching out! 🙏
+        Please reattempt and pass the assessment. Reflection in SPARROW/APAR occurs only after successful completion of the required courses and assessment.
+    next: satisfied
 
   # Step 4.5.2 / 4.5.3 — Completion found: ask if 24 hours have passed
   - id: sp_ask_time_elapsed
     type: message
     prompt:
       text: |
-        We can see that course completion data is reflecting in our system.
+        We can see that **{{ ctx.collected.sp_selected_course_name | default('the course') }}** shows as completed in our system.
 
         Has it been more than **24 hours** since you completed the course/assessment?
     quick_replies:
@@ -623,13 +754,13 @@ nodes:
 
   # Step 4.5.2 — Within 24 hours
   - id: sp_data_reflecting
-    type: end
-    outcome: self_served
+    type: message
     prompt:
       text: |
         It may take up to **24 hours** for the completion data to reflect in SPARROW.
 
-        Please check again after 24 hours. Thank you for your patience! 🙏
+        Please check again after 24 hours.
+    next: satisfied
 
   # Step 4.5.3 — More than 24 hours: check email match
   - id: sp_check_email_match
@@ -647,20 +778,19 @@ nodes:
 
   # Step 4.5.3 — Email IDs match → SPARROW support
   - id: sp_email_match_info
-    type: end
-    outcome: self_served
+    type: message
     prompt:
       text: |
         Since both email IDs are the same and the data is still not reflecting after 24 hours, please contact the **SPARROW support team** directly:
 
         **SPARROW Support Email:** support-sparrow@gov.in
 
-        Please share your iGOT user ID and course details with them for further investigation. Thank you! 🙏
+        Please share your iGOT emailId and course details with them for further investigation.
+    next: satisfied
 
   # Step 4.5.3 — Email IDs do not match → reference video
   - id: sp_email_no_match_info
-    type: end
-    outcome: self_served
+    type: message
     prompt:
       text: |
         Since the email IDs are different, the iGOT training data may not be automatically linked to your SPARROW account.
@@ -669,6 +799,7 @@ nodes:
     action_button:
       label: "📹 How to Fetch iGOT Training Data into SPARROW APAR"
       url: "https://tarento-my.sharepoint.com/personal/soniya_chugh_tarento_com/_layouts/15/stream.aspx?id=%2Fpersonal%2Fsoniya%5Fchugh%5Ftarento%5Fcom%2FDocuments%2FMicrosoft%20Teams%20Chat%20Files%2FHow%20to%20Fetch%20iGOT%20Training%20Data%20into%20SPARROW%20APAR%5FV8%201%2Emp4&referrer=StreamWebApp%2EWeb&referrerScenario=AddressBarCopied%2Eview%2E4cd905b0%2Da0b7%2D40cc%2Dbc5b%2D7818d1639509&ga=1"
+    next: satisfied
 
   # Step 4.3 — APAR/CAP not assigned + MDO found → show MDO details
   - id: sp_no_apar_mdo_found
@@ -683,7 +814,7 @@ nodes:
         **MDO Name:** {{ ctx.collected.mdo_admin_name | default('—') }}
         **MDO Email ID:** {{ ctx.collected.mdo_admin_email | default('—') }}
 
-        > ℹ️ Only APAR-assigned and successfully completed courses/assessments are reflected in SPARROW/APAR.
+        Only APAR-assigned and successfully completed courses/assessments are reflected in SPARROW/APAR.
     next: satisfied
 
   # ===========================================================================
@@ -731,8 +862,7 @@ nodes:
 
   # Step 6.2 — Missing AIS details
   - id: sp_missing_service_details
-    type: end
-    outcome: self_served
+    type: message
     prompt:
       text: |
         We found that some mandatory service-related details are either missing or incomplete in your profile:
@@ -743,8 +873,7 @@ nodes:
         - Central Deputation Details
 
         Please update the required details in your profile. Once updated, the APAR plans should reflect in your account within approximately **2–3 hours**.
-
-        Thank you for reaching out! 🙏
+    next: satisfied
 
   # Step 6.3 — Not AIS: guide profile verification
   - id: sp_guide_profile_verification
@@ -762,13 +891,13 @@ nodes:
     next: sp_guide_profile_verification_closure
 
   - id: sp_guide_profile_verification_closure
-    type: end
-    outcome: self_served
+    type: message
     prompt:
       text: |
         Once the profile is successfully verified, the APAR courses and training plans may reflect in your account.
 
-        Please recheck the APAR section after the profile verification is complete. Thank you! 🙏
+        Please recheck the APAR section after the profile verification is complete.
+    next: satisfied
 
   # Generic API error for SPARROW path
   - id: sp_api_error

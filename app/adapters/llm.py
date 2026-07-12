@@ -131,14 +131,28 @@ class LLMAdapter:
                 "GOOGLE_APPLICATION_CREDENTIALS (Vertex) or LOCAL_LLM_API_BASE (vLLM)."
             )
 
-    async def _call(self, prompt: str) -> str:
-        """Single content-generation call. Returns raw text."""
+    async def _call(self, prompt: str) -> tuple[str, Any]:
+        """Single content-generation call. Returns (raw text, usage_metadata)."""
         response = await asyncio.to_thread(
             self._client.models.generate_content,
             model=self.model_name,
             contents=prompt,
         )
-        return response.text.strip()
+        return response.text.strip(), response.usage_metadata
+
+    @staticmethod
+    def _token_counts(usage: Any) -> tuple[int, int]:
+        """Extract (input_tokens, output_tokens) from Gemini usage_metadata.
+
+        Gemini bills thinking tokens at the output rate (included in
+        candidates_token_count), so no adjustment is needed — pass counts as-is.
+        thoughts_token_count is informational only.
+        """
+        if usage is None:
+            return 0, 0
+        prompt = getattr(usage, "prompt_token_count", 0) or 0
+        candidates = getattr(usage, "candidates_token_count", 0) or 0
+        return prompt, candidates
 
     @staticmethod
     def _parse_json(raw: str) -> Any:
@@ -170,9 +184,27 @@ class LLMAdapter:
             model=self.model_name,
             operation="ticket_summary",
             prompt_len=len(full_prompt),
+            span_input=[
+                {"role": "system", "content": TICKET_SUMMARY_PROMPT.strip()},
+                {"role": "user", "content": (
+                    f"flow_id: {flow_meta.get('flow_id', 'unknown')}\n"
+                    f"transcript_chars: {len(transcript)}\n"
+                    f"collected_fields: {', '.join(collected.keys())}\n"
+                    f"directive: {directives.get('objective', '')[:200]}"
+                )},
+            ],
         ):
-            raw = await self._call(full_prompt)
-            tracing.update_current_generation(output=raw[:800])
+            raw, usage = await self._call(full_prompt)
+            in_tok, out_tok = self._token_counts(usage)
+            _trace_out: Any = raw[:800]
+            try:
+                _trace_out = self._parse_json(raw)
+            except Exception:  # noqa: BLE001
+                pass
+            tracing.update_current_generation(
+                output={"role": "assistant", "content": _trace_out},
+                usage_input=in_tok, usage_output=out_tok,
+            )
         return self._parse_json(raw)
 
     async def generate_choice(
@@ -200,9 +232,25 @@ class LLMAdapter:
             model=self.model_name,
             operation="choice_classification",
             prompt_len=len(prompt),
+            span_input=[
+                {"role": "system", "content": "You are an intent classifier for the iGOT Karmayogi Bharat support chatbot."},
+                {"role": "user", "content": (
+                    f"user_text_chars: {len(input_text)}\n"
+                    f"candidates:\n{json.dumps([{'id': c['id'], 'criteria': c.get('criteria', c['id'])} for c in candidates], indent=2)}"
+                )},
+            ],
         ):
-            raw = await self._call(prompt)
-            tracing.update_current_generation(output=raw[:200])
+            raw, usage = await self._call(prompt)
+            in_tok, out_tok = self._token_counts(usage)
+            _trace_out: Any = raw[:200]
+            try:
+                _trace_out = self._parse_json(raw)
+            except Exception:  # noqa: BLE001
+                pass
+            tracing.update_current_generation(
+                output={"role": "assistant", "content": _trace_out},
+                usage_input=in_tok, usage_output=out_tok,
+            )
         result = self._parse_json(raw)
 
         choice: str = result.get("choice", "")
@@ -249,9 +297,26 @@ class LLMAdapter:
             model=self.model_name,
             operation="recommendations",
             prompt_len=len(prompt),
+            span_input=[
+                {"role": "system", "content": "You are a course recommendation assistant for iGOT Karmayogi Bharat."},
+                {"role": "user", "content": (
+                    f"query_chars: {len(query)}\n"
+                    f"enrolled_count: {len(context_courses) if context_courses else 0}\n"
+                    f"max_results: {max_results}"
+                )},
+            ],
         ):
-            raw = await self._call(prompt)
-            tracing.update_current_generation(output=raw[:800])
+            raw, usage = await self._call(prompt)
+            in_tok, out_tok = self._token_counts(usage)
+            _trace_out: Any = raw[:800]
+            try:
+                _trace_out = self._parse_json(raw)
+            except Exception:  # noqa: BLE001
+                pass
+            tracing.update_current_generation(
+                output={"role": "assistant", "content": _trace_out},
+                usage_input=in_tok, usage_output=out_tok,
+            )
         result = self._parse_json(raw)
         if not isinstance(result, list):
             raise ValueError(f"Expected JSON array, got: {type(result)}")

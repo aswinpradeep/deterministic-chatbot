@@ -111,9 +111,10 @@ nodes:
       - { from: "$.response.profileDetails.professionalDetails[0].designation", to: collected.user_designation }
       - { from: "$.response.profileDetails.professionalDetails[0].group",       to: collected.user_group }
       - { from: "$.response.profileDetails.cadreDetails",                    to: collected.cadre_details }
-      - { from: "$.response.profileDetails.serviceDetails",                  to: collected.service_details }
-      - { from: "$.response.profileDetails.batch",                           to: collected.batch_details }
-      - { from: "$.response.profileDetails.centralDeputation",               to: collected.central_deputation }
+      - { from: "$.response.profileDetails.cadreDetails.cadreName",           to: collected.cadre_name }
+      - { from: "$.response.profileDetails.cadreDetails.civilServiceName",    to: collected.service_details }
+      - { from: "$.response.profileDetails.cadreDetails.cadreBatch",          to: collected.batch_details }
+      - { from: "$.response.profileDetails.cadreDetails.isOnCentralDeputation", to: collected.central_deputation }
     on_success: branch_on_issue_type_after_profile
     on_error:
       any: api_error_escalation
@@ -134,6 +135,19 @@ nodes:
           or str(ctx.collected.profile_verified).lower() == 'true'
         then: branch_on_service_details
     default: show_not_verified
+
+  # SOP §1.3 — checked immediately after verification, before deciding whether
+  # to show full details (§1.4) or ask AIS eligibility first (§1.5).
+  - id: branch_on_service_details
+    type: branch
+    rules:
+      - if: >
+          ctx.collected.cadre_details != None
+          and ctx.collected.service_details != None
+          and ctx.collected.batch_details != None
+          and ctx.collected.central_deputation != None
+        then: show_full_details
+    default: ask_all_india_service
 
   - id: show_not_verified
     type: resolution
@@ -157,34 +171,25 @@ nodes:
       text: |
         Once your profile is successfully verified, please check the Comprehensive Assessment Program (CAP) again.
 
-        Please feel free to reach out if you need any further assistance.
+
     next: satisfied
 
-  - id: branch_on_service_details
-    type: branch
-    rules:
-      - if: >
-          ctx.collected.cadre_details != None
-          and ctx.collected.service_details != None
-          and ctx.collected.batch_details != None
-          and ctx.collected.central_deputation != None
-        then: show_full_details
-    default: show_limited_details
-
+  # SOP §1.4 — all four AIS fields present: confirm everything in one screen.
   - id: show_full_details
     type: message
     prompt:
       text: |
-        We checked, and found the following details in your profile:
+        Upon checking, we found the following details in your profile:
 
         - **Organization:** {{ ctx.collected.org_name or ctx.collected.org_channel }}
         - **Designation:** {{ ctx.collected.user_designation }}
         - **Group:** {{ ctx.collected.user_group }}
-        - **Cadre:** {{ ctx.collected.cadre_details }}
+        - **Cadre:** {{ ctx.collected.cadre_name }}
         - **Service:** {{ ctx.collected.service_details }}
         - **Batch:** {{ ctx.collected.batch_details }}
+        - **Central Deputation:** {{ 'Yes' if ctx.collected.central_deputation else 'No' }}
 
-        Could you confirm whether these details are correct?
+        Kindly confirm whether the above details are correct.
     quick_replies:
       - { id: yes, label: "✅ Yes, details are correct" }
       - { id: no,  label: "❌ No, details are incorrect" }
@@ -192,6 +197,29 @@ nodes:
     on_reply:
       yes: fetch_assigned_courses
       no: ask_incorrect_field_full
+
+  # SOP §1.4.2 — no "Central Deputation" option here; the SOP's incorrect-field
+  # list for this screen is Organization/Designation/Group/Cadre/Service/Batch only.
+  - id: ask_incorrect_field_full
+    type: message
+    prompt:
+      text: |
+        Kindly let us know which of the following details are incorrect:
+    quick_replies:
+      - { id: org,     label: "🏢 Organization" }
+      - { id: desig,   label: "📋 Designation" }
+      - { id: group,   label: "👥 Group" }
+      - { id: cadre,   label: "🏛️ Cadre" }
+      - { id: service, label: "🎖️ Service" }
+      - { id: batch,   label: "📅 Batch" }
+    disable_input: true
+    on_reply:
+      org:     guide_transfer_request
+      desig:   guide_designation_update
+      group:   guide_profile_update
+      cadre:   guide_profile_update
+      service: guide_profile_update
+      batch:   guide_profile_update
 
   - id: fetch_assigned_courses
     type: api_call
@@ -205,7 +233,7 @@ nodes:
         courseCategory: "Comprehensive Assessment Program"
     response_mapping:
       - { from: "$.count", to: collected.cap_count }
-      - { from: "$.content", to: collected.all_caps }
+      - { from: "$.content", to: collected.all_caps, transform: sort_caps_by_end_date }
       - { from: "$.content[0].identifier", to: collected.cap_id }
       - { from: "$.content[0].name", to: collected.cap_name }
       - { from: "$.content[0].endDate", to: collected.cap_end_date }
@@ -443,29 +471,8 @@ nodes:
       url: "{{ env.KARMAYOGI_PORTAL_BASE_URL }}/app/toc/{{ ctx.collected.selected_cap_id or (ctx.collected.all_caps[0].identifier if ctx.collected.all_caps else '') }}/overview"
     next: satisfied
 
-  - id: ask_incorrect_field_full
-    type: message
-    prompt:
-      text: |
-        Could you let us know which of the following details are incorrect:
-    quick_replies:
-      - { id: org, label: "🏢 Organization" }
-      - { id: desig, label: "📋 Designation" }
-      - { id: group, label: "👥 Group" }
-      - { id: cadre, label: "🏛️ Cadre" }
-      - { id: service, label: "🎖️ Service" }
-      - { id: batch, label: "📅 Batch" }
-      - { id: deputation, label: "🏢 Central Deputation" }
-    disable_input: true
-    on_reply:
-      org: guide_transfer_request
-      desig: guide_designation_update
-      group: guide_profile_update
-      cadre: guide_profile_update
-      service: guide_profile_update
-      batch: guide_profile_update
-      deputation: guide_profile_update
-
+  # SOP §1.5 — only reached when branch_on_service_details already found a
+  # missing AIS field, so "Yes" here always implies details are missing.
   - id: ask_all_india_service
     type: message
     prompt:
@@ -480,7 +487,7 @@ nodes:
     disable_input: true
     on_reply:
       yes: inform_missing_service_details
-      no: fetch_assigned_courses
+      no:  show_limited_details
 
   - id: inform_missing_service_details
     type: message
@@ -495,7 +502,7 @@ nodes:
 
         Please update the required details in your profile. Once updated, please wait approximately **4 hours** and then check whether the Comprehensive Assessment Program (CAP) is visible.
 
-        Please feel free to reach out if you need any further assistance.
+        
     next: satisfied
 
   - id: show_limited_details
@@ -514,7 +521,7 @@ nodes:
       - { id: no,  label: "❌ No, details are incorrect" }
     disable_input: true
     on_reply:
-      yes: ask_all_india_service
+      yes: fetch_assigned_courses
       no: ask_incorrect_field_limited
 
   - id: ask_incorrect_field_limited
@@ -532,56 +539,54 @@ nodes:
       desig: guide_designation_update
       group: guide_profile_update
 
+  # Each of the three "incorrect field" paths ends with its own approval note +
+  # CAP-recheck line, in the same node/response (SOP Closure: "update details,
+  # check CAP again once reflected"). Wording matches this codebase's existing
+  # convention per context: Transfer Request → MDO Admin (access_revoked.yaml,
+  # apar_not_visible.yaml, learning_hours.yaml); Designation/Group → Organization
+  # Admin (mode_b_designation_not_verified.yaml, mode_b_karmayogi_badge_check.yaml).
   - id: guide_transfer_request
     type: resolution
     prompt:
       text: |
         🏢 **Update Organization — Raise a Transfer Request**
-        
+
         Follow the steps below to raise a Transfer Request:
     steps:
       - "Log in to iGOT Karmayogi."
       - "Click on the **Profile Icon** and select **View Profile**."
-      - "Select **Make Transfer Request**."
-      - "Select the Correct Organization Name and update Group/Designation if needed."
-      - "Submit the request."
-    next: closure_after_update
+      - "Select **Make Transfer Request**, choose the correct Organization Name, and submit the request."
+      - "The request will be sent to the **MDO Admin** for approval. Once approved, please check if the Comprehensive Assessment Program (CAP) is visible."
+    next: satisfied
 
   - id: guide_designation_update
     type: resolution
     prompt:
       text: |
         📋 **Update Designation**
-        
+
         Follow the steps below to update your designation:
     steps:
       - "Log in to iGOT Karmayogi."
       - "Click on the **Profile Icon** and select **View Profile**."
       - "Navigate to **Primary Details** and click the ✏️ **Edit (pen) icon**."
       - "Update your Designation and click **Send for Approval**."
-    next: closure_after_update
+      - "Once submitted, the request will be sent to the **Organization Admin** for approval. Once approved, your designation will reflect in your profile, and you can check if the Comprehensive Assessment Program (CAP) is visible."
+    next: satisfied
 
   - id: guide_profile_update
     type: resolution
     prompt:
       text: |
         👥 **Update Profile Details**
-        
+
         Follow the steps below to update your profile details:
     steps:
       - "Log in to iGOT Karmayogi."
       - "Click on the **Profile Icon** and select **View Profile**."
       - "Navigate to **Primary Details** and click the ✏️ **Edit (pen) icon**."
       - "Update the incorrect fields and click **Send for Approval**."
-    next: closure_after_update
-
-  - id: closure_after_update
-    type: message
-    prompt:
-      text: |
-        Once you've updated the required details, please check if the Comprehensive Assessment Program (CAP) is visible again after the profile changes are reflected.
-
-        Please feel free to reach out if you need any further assistance.
+      - "Once submitted, the request will be sent to the **Organization Admin** for approval. Once approved, your details will reflect in your profile, and you can check if the Comprehensive Assessment Program (CAP) is visible."
     next: satisfied
 
 
@@ -628,12 +633,49 @@ nodes:
     next: satisfied
 
   - id: yp_not_found
-    type: message
+    type: ticket_confirm
     prompt:
       text: |
         We couldn't retrieve the MDO Admin or YP/AM contact details for your organization at this time.
-        Please reach out to your concerned authority for further assistance.
-    next: satisfied
+
+        This needs further investigation from our support team. Would you like us to create a support ticket for this issue?
+    on_confirm: yp_not_found_ticket_summary
+    on_cancel: satisfied
+
+  - id: yp_not_found_ticket_summary
+    type: ticket_confirm
+    prompt:
+      text: |
+        **Issue Identified:** CAP Not Visible — No MDO Admin or YP Contact Found
+
+        **Summary of Request:**
+        Your Comprehensive Assessment Program (CAP) is not visible, and we could not locate an MDO Admin or YP/AM contact for your organization to help resolve this. You would like us to investigate this further.
+
+        • **Organization:** {{ ctx.collected.org_name or ctx.collected.org_channel | default('Not identified') }}
+
+        Please review the details above and confirm whether they are correct.
+    on_confirm: yp_not_found_raise_ticket
+    on_cancel: satisfied
+
+  - id: yp_not_found_raise_ticket
+    type: transfer_llm
+    auto_raise: silent
+    llm_context:
+      include_messages:  true
+      include_collected: true
+      include_flow_meta: true
+    llm_directives:
+      objective: |
+        The user's Comprehensive Assessment Program (CAP) is not visible, and no MDO Admin
+        or YP/AM contact could be located for their organization either — so the user has
+        no self-service path to get this resolved.
+        Generate a Zoho support ticket so the support team can manually identify the
+        correct contact and resolve the visibility issue.
+        Subject: "CAP Not Visible — No Admin or YP Contact Found"
+        Description: include the organization/channel and note that neither an MDO Admin
+        nor a YP/AM contact could be found.
+      priority_override: P3
+    on_complete: confirm_ticket
 
   # ===========================================================================
   # Final Assessment Locked in CAP - Subcase 3
@@ -767,9 +809,19 @@ nodes:
     dynamic_options:
       source: context
       context_key: collected.cap_incomplete_courses_picker
+      # id_field uses courseName (not courseId) for the picker's key: every
+      # pending resource under the same course was previously built with the
+      # SAME courseId (the parent course's id), so the picker collapsed all
+      # sibling resources under one course down to a single selectable entry.
+      # Resource names are unique within a course, so keying on courseName
+      # keeps each resource distinct. extra_fields restores the real course
+      # DO_ID into selected_pending_course_id on pick, since that's still
+      # needed by share_pending_resource_link's "open course" URL below.
       response_mapping:
-        id_field: courseId
+        id_field: courseName
         label_field: courseName
+        extra_fields:
+          - { from: courseId, to: collected.selected_pending_course_id }
     next: share_pending_resource_link
 
   - id: share_pending_resource_link

@@ -32,7 +32,7 @@
 # =============================================================================
 
 flow_id: DESIGNATION_GROUP_NOT_VERIFIED
-flow_type: deterministic
+flow_type: deterministic_with_llm_fallback
 version: 2
 
 metadata:
@@ -65,6 +65,11 @@ entry_node: fetch_private_profile
 imports:
   - _yp_lookup
   - _terminal
+  - fragment: _zoho_ticket
+    with:
+      cf_category:     profile
+      cf_sub_category: designation_group_not_verified
+      cf_flow_id:      DESIGNATION_GROUP_NOT_VERIFIED
 
 nodes:
 
@@ -105,7 +110,7 @@ nodes:
         I couldn't retrieve your profile details at this time.
 
         Please try again in a few minutes.
-    next: resolution_check
+    next: satisfied
 
   # ===========================================================================
   # SOP §1.1 / §1.2 — Gate: is the profile already verified?
@@ -135,7 +140,7 @@ nodes:
         A green tick mark should be visible next to your name.
 
         The green tick indicates that the profile is already verified.
-    next: resolution_check
+    next: satisfied
 
   # ===========================================================================
   # Branch — does a pending transfer/designation request exist?
@@ -204,7 +209,7 @@ nodes:
         Please contact the below admin for further assistance: 
         Admin Name: {{ ctx.collected.mdo_leader_name or ctx.collected.mdo_leader_name_fallback }}
         Admin Email ID: {{ ctx.collected.mdo_leader_email or ctx.collected.mdo_leader_email_fallback }}
-    next: resolution_check
+    next: satisfied
 
   # ---------------------------------------------------------------------------
   # §1.1.2 — No Org Admin → Global Rule: YP lookup from Excel
@@ -223,16 +228,52 @@ nodes:
         Please connect with the concerned YP for further assistance.
         YP Name: {{ ctx.collected.yp_name }}
         YP Email ID: {{ ctx.collected.yp_email }}
-    next: resolution_check
+    next: satisfied
 
   - id: yp_not_found
-    type: message
+    type: ticket_confirm
     prompt:
       text: |
-        Your designation request has already been submitted. However, there is currently no Organization Admin available to approve the request. 
-        
-        Please connect with the concerned YP for further assistance.
-    next: resolution_check
+        We checked, and found that your designation request has already been submitted, but there is currently no Organization Admin or YP contact available for your organization to assist with approval.
+
+        This needs further investigation from our support team. Would you like us to create a support ticket for this issue?
+    on_confirm: yp_not_found_ticket_summary
+    on_cancel: satisfied
+
+  - id: yp_not_found_ticket_summary
+    type: ticket_confirm
+    prompt:
+      text: |
+        **Issue Identified:** Designation / Group Verification — No Admin or YP Contact Found
+
+        **Summary of Request:**
+        Your designation request has already been submitted, but there is currently no Organization Admin available to approve it, and we could not locate a YP contact for your organization either. You would like us to investigate this further.
+
+        • **Organization:** {{ ctx.collected.org_channel | default('Not identified') }}
+
+        Please review the details above and confirm whether they are correct.
+    on_confirm: yp_not_found_raise_ticket
+    on_cancel: satisfied
+
+  - id: yp_not_found_raise_ticket
+    type: transfer_llm
+    auto_raise: silent
+    llm_context:
+      include_messages:  true
+      include_collected: true
+      include_flow_meta: true
+    llm_directives:
+      objective: |
+        The user's designation/group verification request is pending, but no Organization
+        Admin could be found to approve it, and no YP/SPOC contact could be located for
+        their organization either — so the user has no self-service path to get it approved.
+        Generate a Zoho support ticket so the support team can manually identify the
+        correct approver and resolve the pending request.
+        Subject: "Designation/Group Verification — No Admin or YP Contact Found"
+        Description: include the organization/channel and note that the request is pending
+        with no available approver or YP contact.
+      priority_override: P3
+    on_complete: confirm_ticket
 
   # ===========================================================================
   # §1.2 — No pending request — guide user through submission steps
@@ -245,7 +286,7 @@ nodes:
         Please follow the steps below to update and submit your designation or group for approval:
     steps:
       - "Click on View Profile."
-      - "Navigate to Primary Details and click the Edit (Pen) icon."
+      - "Navigate to **Primary Details** and click the ✏️ **Edit (pen) icon**."
       - "Update the correct Group and Designation."
       - "Click Send for Approval."
       - "Once the request is submitted, it will be sent to the Organization Admin for approval. The designation or group will reflect in your profile after approval."
@@ -257,7 +298,7 @@ nodes:
     on_reply:
       save_to: collected.submission_attempt
       yes: ask_is_designation_visible
-      no:  resolution_check
+      no:  yp_not_found
 
   # ===========================================================================
   # §1.3 — User submitted but designation still not visible
@@ -357,7 +398,7 @@ nodes:
         Admin Name: {{ ctx.collected.mdo_leader_name or ctx.collected.mdo_leader_name_fallback }}
         Admin Email ID: {{ ctx.collected.mdo_leader_email or ctx.collected.mdo_leader_email_fallback }}
         The designation will reflect in your profile after approval.
-    next: resolution_check
+    next: satisfied
 
   # ===========================================================================
   # §1.3.2 / §1.4.2 — No pending request after recheck → guide steps again
@@ -371,7 +412,7 @@ nodes:
         Please follow the steps below to submit your designation or group for approval again:
     steps:
       - "Click on View Profile."
-      - "Navigate to Primary Details and click the Edit (Pen) icon."
+      - "Navigate to **Primary Details** and click the ✏️ **Edit (pen) icon**."
       - "Update the correct Group and Designation."
       - "Click Send for Approval."
       - "Once the request is submitted, it will be sent to the Organization Admin for approval. The designation or group will reflect in your profile after approval."
@@ -381,30 +422,5 @@ nodes:
         - { id: yes, label: "✅ Yes, re-submitted" }
         - { id: no,  label: "❌ No, still having trouble" }
     on_reply:
-      yes: resolution_check
-      no:  resolution_check
-
-  # ===========================================================================
-  # Resolution check
-  # ===========================================================================
-
-  - id: resolution_check
-    type: message
-    prompt:
-      text: "Did this help resolve your designation / group verification issue?"
-    quick_replies:
-      - { id: yes, label: "✅ Yes, resolved" }
-      - { id: no,  label: "❌ No, need more help" }
-    disable_input: true
-    on_reply:
       yes: satisfied
-      no:  unresolved_end
-
-  - id: unresolved_end
-    type: end
-    outcome: unresolved
-    prompt:
-      text: |
-        I'm sorry I couldn't fully resolve this for you.
-
-        Please try again after some time. Thank you for your patience.
+      no:  satisfied

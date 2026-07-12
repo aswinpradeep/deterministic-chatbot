@@ -214,8 +214,7 @@ nodes:
     default: lookup_yp_contact
 
   - id: domain_invalid_show_mdo
-    type: end
-    outcome: self_served
+    type: message
     prompt:
       text: |
         The Email ID **{{ ctx.collected.new_identifier }}** cannot be updated because its domain is **not whitelisted** on the iGOT Karmayogi platform.
@@ -224,6 +223,7 @@ nodes:
 
         👤 **{{ ctx.collected.mdo_leader_name or ctx.collected.mdo_leader_name_fallback }} {{ ctx.collected.mdo_leader_surname or '' }}**
         📧 {{ ctx.collected.mdo_leader_email or ctx.collected.mdo_leader_email_fallback }}
+    next: satisfied
 
   # ---------------------------------------------------------------------------
   # yp_found_result / yp_not_found — targets for _yp_lookup fragment's
@@ -233,8 +233,7 @@ nodes:
   # same id before the import statement (flow-wins rule).
   # ---------------------------------------------------------------------------
   - id: yp_found_result
-    type: end
-    outcome: self_served
+    type: message
     prompt:
       text: |
         The Email ID **{{ ctx.collected.new_identifier }}** cannot be updated because its domain is **not whitelisted** on the iGOT Karmayogi platform.
@@ -244,24 +243,62 @@ nodes:
         👤 **{{ ctx.collected.yp_name }}**
         📧 {{ ctx.collected.yp_email }}
         📞 {{ ctx.collected.yp_mobile }}
+    next: satisfied
 
   - id: yp_not_found
-    type: end
-    outcome: self_served
+    type: ticket_confirm
     prompt:
       text: |
-        The Email ID **{{ ctx.collected.new_identifier }}** cannot be updated because its domain is **not whitelisted** on the iGOT Karmayogi platform.
+        The Email ID **{{ ctx.collected.new_identifier }}** cannot be updated because its domain is **not whitelisted** on the iGOT Karmayogi platform, and we couldn't retrieve a YP contact for your organization at this time.
 
-        Please contact the **Young Professional (YP)** assigned to your state/department/organisation for further clarification.
+        This needs further investigation from our support team. Would you like us to create a support ticket for this issue?
+    on_confirm: yp_not_found_ticket_summary
+    on_cancel: satisfied
+
+  - id: yp_not_found_ticket_summary
+    type: ticket_confirm
+    prompt:
+      text: |
+        **Issue Identified:** Domain Whitelisting — No YP Contact Found
+
+        **Summary of Request:**
+        The Email ID {{ ctx.collected.new_identifier }} cannot be updated because its domain is not whitelisted, and we could not locate a YP contact for your organization to help resolve this. You would like us to investigate this further.
+
+        • **Organization:** {{ ctx.collected.org_channel | default('Not identified') }}
+        • **Email ID to be Updated:** {{ ctx.collected.new_identifier }}
+
+        Please review the details above and confirm whether they are correct.
+    on_confirm: yp_not_found_raise_ticket
+    on_cancel: satisfied
+
+  - id: yp_not_found_raise_ticket
+    type: transfer_llm
+    auto_raise: silent
+    llm_context:
+      include_messages:  true
+      include_collected: true
+      include_flow_meta: true
+    llm_directives:
+      objective: |
+        The user's Email ID/domain is not whitelisted on the iGOT Karmayogi platform, and no
+        YP contact could be located for their organization either — so the user has no
+        self-service path to resolve this.
+        Generate a Zoho support ticket so the support team can manually whitelist the domain
+        or identify the correct contact.
+        Subject: "Domain Whitelisting — No YP Contact Found"
+        Description: include the organization/channel and the Email ID/domain that needs
+        whitelisting, and note that no YP contact could be found.
+      priority_override: P3
+    on_complete: "{{ params.ticket_confirm_node | default('confirm_ticket') }}"
 
   - id: domain_invalid_no_mdo
-    type: end
-    outcome: self_served
+    type: message
     prompt:
       text: |
         The Email ID **{{ ctx.collected.new_identifier }}** cannot be updated because its domain is **not whitelisted** on the iGOT Karmayogi platform.
 
         Please contact your **MDO Leader** or the **Young Professional (YP)** assigned to your organisation for further assistance.
+    next: satisfied
 
   # ===========================================================================
   # STEP 3 — Fetch current user's profile to compare identifier
@@ -398,7 +435,7 @@ nodes:
       - { id: no_otp, label: "❌ Did not receive OTP" }
     disable_input: true
     on_reply:
-      done: self_served_end
+      done: satisfied
       no_otp: otp_not_received_fetch_profile
 
   # ---------------------------------------------------------------------------
@@ -469,14 +506,14 @@ nodes:
     default: otp_yp_data_lookup
 
   - id: otp_show_mdo_contact
-    type: end
-    outcome: self_served
+    type: message
     prompt:
       text: |
         If you're not receiving the OTP, please connect with the contact below for further assistance:
 
         👤 **{{ ctx.collected.mdo_leader_name or ctx.collected.mdo_leader_name_fallback }} {{ ctx.collected.mdo_leader_surname or '' }}**
         📧 {{ ctx.collected.mdo_leader_email or ctx.collected.mdo_leader_email_fallback }}
+    next: satisfied
 
   # Inline YP lookup scoped to the OTP-not-received sub-flow.
   # Named otp_yp_data_lookup to avoid collision with lookup_yp_contact
@@ -495,8 +532,7 @@ nodes:
       any: otp_no_mdo_fallback
 
   - id: otp_show_yp_contact
-    type: end
-    outcome: self_served
+    type: message
     prompt:
       text: |
         If you're not receiving the OTP, please connect with the contact below for further assistance:
@@ -504,13 +540,14 @@ nodes:
         👤 **{{ ctx.collected.yp_name }}**
         📧 {{ ctx.collected.yp_email }}
         📞 {{ ctx.collected.yp_mobile }}
+    next: satisfied
 
   - id: otp_no_mdo_fallback
-    type: end
-    outcome: self_served
+    type: message
     prompt:
       text: |
         If you're not receiving the OTP, please contact the **Young Professional (YP)** or **MDO Leader** assigned to your organisation for further assistance.
+    next: satisfied
 
   # ===========================================================================
   # STEP 4 — Identifier ALREADY registered → fetch conflict account enrollments
@@ -608,10 +645,3 @@ nodes:
       priority_override: P3
     on_complete: "{{ params.ticket_confirm_node | default('confirm_ticket') }}"
     on_restart: ask_identifier_type
-
-  # ===========================================================================
-  # Terminal
-  # ===========================================================================
-  - id: self_served_end
-    type: end
-    outcome: self_served

@@ -17,6 +17,9 @@ fragment_id: enrollment_picker
 #   on_empty       — Node id to route to when the enrollment list is empty.
 #                    Omit (or leave blank) to fall back to the default "No results
 #                    found." message with no further routing.
+#   empty_message  — Message shown immediately when the enrollment list is empty.
+#                    Defaults to a "no enrolled courses, please enrol" message so
+#                    the user never sees a generic "No results found." reply.
 #
 #
 # Stored fields (all prefixed by field_prefix):
@@ -74,5 +77,6 @@ nodes:
       search:     { enabled: true, placeholder: "Search your enrolled courses..." }
       pagination: { enabled: true, page_size: 10 }
       cache_ttl:  300
+      empty_message: "{{ params.empty_message | default('You do not have any enrolled courses or programs at the moment.\n\nPlease enrol in a course on the iGOT Karmayogi portal and try again.') }}"
       on_empty:   "{{ params.on_empty | default('') }}"
     next: {{ params.next }}
