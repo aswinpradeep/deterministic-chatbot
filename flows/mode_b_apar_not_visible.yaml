@@ -55,6 +55,11 @@ imports:
   - _terminal
   - fragment: _mdo_admin_lookup
   - fragment: _yp_lookup
+  - fragment: _zoho_ticket
+    with:
+      cf_category:     course
+      cf_sub_category: apar_not_visible
+      cf_flow_id:      APAR_NOT_VISIBLE
 
 nodes:
 
@@ -651,12 +656,49 @@ nodes:
     next: satisfied
 
   - id: yp_not_found
-    type: message
+    type: ticket_confirm
     prompt:
       text: |
         We couldn't retrieve the MDO Admin or YP/AM contact details for your organization at this time.
-        Please reach out to your concerned authority for further assistance.
-    next: satisfied
+
+        This needs further investigation from our support team. Would you like us to create a support ticket for this issue?
+    on_confirm: yp_not_found_ticket_summary
+    on_cancel: satisfied
+
+  - id: yp_not_found_ticket_summary
+    type: ticket_confirm
+    prompt:
+      text: |
+        **Issue Identified:** Training Plan / APAR Not Visible — No MDO Admin or YP Contact Found
+
+        **Summary of Request:**
+        Your training plan/APAR courses are not visible, and we could not locate an MDO Admin or YP/AM contact for your organization to help resolve this. You would like us to investigate this further.
+
+        • **Organization:** {{ ctx.collected.org_name or ctx.collected.org_channel | default('Not identified') }}
+
+        Please review the details above and confirm whether they are correct.
+    on_confirm: yp_not_found_raise_ticket
+    on_cancel: satisfied
+
+  - id: yp_not_found_raise_ticket
+    type: transfer_llm
+    auto_raise: silent
+    llm_context:
+      include_messages:  true
+      include_collected: true
+      include_flow_meta: true
+    llm_directives:
+      objective: |
+        The user's training plan/APAR courses are not visible, and no MDO Admin or YP/AM
+        contact could be located for their organization either — so the user has no
+        self-service path to get this resolved.
+        Generate a Zoho support ticket so the support team can manually identify the
+        correct contact and resolve the visibility issue.
+        Subject: "Training Plan / APAR Not Visible — No Admin or YP Contact Found"
+        Description: include the organization/channel and note that neither an MDO Admin
+        nor a YP/AM contact could be found.
+      priority_override: P3
+    on_complete: confirm_ticket
 
 
 
