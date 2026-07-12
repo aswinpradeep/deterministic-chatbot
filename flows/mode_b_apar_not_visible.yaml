@@ -188,14 +188,12 @@ nodes:
       - { id: non_apar, label: "📘 View Non-APAR Courses" }
       - { id: ec1,      label: "❓ A specific course is missing" }
       - { id: ec2,      label: "❓ Wrong CBP/Course" }
-      - { id: ok,       label: "✅ Understood, thank you" }
     disable_input: true
     on_reply:
       apar:     show_apar_courses
       non_apar: show_non_apar_courses
       ec1:      ec1_ask_course_name
       ec2:      ec2_fetch_profile
-      ok:       satisfied
 
   # ===========================================================================
   # Step 5 — Confirm course type  (SOP Step 2.3.1)
@@ -614,13 +612,13 @@ nodes:
     prompt:
       text: |
         {% if ctx.collected.cbp_total_count == 0 or ctx.collected.cbp_total_count == None %}
-        We checked, and no CBP/training plan is currently assigned to your profile.
+        Upon checking, we found that no CBP/training plan is currently assigned to your profile.
         Training plans and courses are assigned by the concerned authority.
-        Please connect with the contact details below for further assistance:
+        Kindly connect with the contact details below for further assistance:
         {% elif ctx.collected.ec1_course_name %}
-        We checked, and the requested course isn't currently available in your assigned training/CBP plan.
+        Upon checking, we found that the requested course is currently not available in your assigned training/CBP plan.
         Training plans and course assignments are managed by the concerned authority.
-        Please connect with the contact details below for further assistance regarding course allocation/addition:
+        We request you to kindly connect with the contact details below for further assistance regarding course allocation/addition:
         {% else %}
         As training plans/courses are managed and assigned by the concerned authority, please connect with the contact details below for further assistance:
         {% endif %}
@@ -634,13 +632,13 @@ nodes:
     prompt:
       text: |
         {% if ctx.collected.cbp_total_count == 0 or ctx.collected.cbp_total_count == None %}
-        We checked, and no CBP/training plan is currently assigned to your profile.
+        Upon checking, we found that no CBP/training plan is currently assigned to your profile.
         Training plans and courses are assigned by the concerned authority.
-        Please connect with the contact details below for further assistance:
+        Kindly connect with the contact details below for further assistance:
         {% elif ctx.collected.ec1_course_name %}
-        We checked, and the requested course isn't currently available in your assigned training/CBP plan.
+        Upon checking, we found that the requested course is currently not available in your assigned training/CBP plan.
         Training plans and course assignments are managed by the concerned authority.
-        Please connect with the contact details below for further assistance regarding course allocation/addition:
+        We request you to kindly connect with the contact details below for further assistance regarding course allocation/addition:
         {% else %}
         As training plans/courses are managed and assigned by the concerned authority, please connect with the contact details below for further assistance:
         {% endif %}
@@ -801,7 +799,7 @@ nodes:
     type: message
     prompt:
       text: |
-        We checked, and the mentioned course is already part of your training plan and has been successfully completed.
+        Upon checking, we found that the mentioned course is already part of your training plan and has been successfully completed.
 
         To view the completed course, please follow the steps below:
 
@@ -839,7 +837,7 @@ nodes:
     type: message
     prompt:
       text: |
-        We checked, and the course '{{ ctx.collected.ec1_course_name }}' is already available in your assigned training plan.
+        Upon checking, we found that the course '{{ ctx.collected.ec1_course_name }}' is already available in your assigned training plan.
 
         To view the mentioned courses, please follow the steps below:
 

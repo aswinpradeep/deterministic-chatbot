@@ -691,7 +691,7 @@ nodes:
         - { id: PENDING, label: "🕐 I'll try and come back" }
     on_reply:
       YES:     progress_updated_end
-      NO:      progress_auto_ticket
+      NO:      progress_step1_ticket
       PENDING: progress_pending_end
 
   # ===========================================================================
@@ -726,7 +726,7 @@ nodes:
         - { id: PENDING, label: "🕐 I'll try and come back" }
     on_reply:
       YES:     progress_updated_end
-      NO:      progress_auto_ticket
+      NO:      progress_step1_ticket
       PENDING: progress_pending_end
 
   # ===========================================================================
