@@ -268,7 +268,7 @@ nodes:
     steps:
       - "Click **View Profile**."
       - "Navigate to **Primary Details**."
-      - "Click the **Edit (✏️)** icon."
+      - "Click the **Edit ✏️** icon."
       - "Search for **{{ ctx.collected.designation_selected_name }}** in the Designation field."
       - "Select it and click **Save**."
     follow_up:
@@ -606,7 +606,7 @@ nodes:
     steps:
       - "Click on **View Profile**."
       - "Navigate to **Other Details**."
-      - "Click on the **Edit (✏️)** icon."
+      - "Click on the **Edit ✏️** icon."
       - "Locate the **Mother Tongue** field."
       - "Select **{{ ctx.collected.mother_tongue_verified }}** from the list."
       - "Click on **Save / Update Details**."
@@ -1362,7 +1362,7 @@ nodes:
     prompt:
       text: "Your **Username Verification Tick** is missing. This appears once your MDO admin verifies your profile."
     steps:
-      - "Go to **View Profile → Primary Details → Edit (✏️)**."
+      - "Go to **View Profile → Primary Details → Edit ✏️**."
       - "Ensure **Group** and **Designation** are filled in and saved."
       - "Once primary details are complete, your MDO admin verifies your profile — the tick appears automatically."
       - "If it has been more than **2 working days**, contact your MDO admin directly."
@@ -1440,7 +1440,7 @@ nodes:
     prompt:
       text: "Your **Group** is not set in Primary Details."
     steps:
-      - "Click **View Profile → Primary Details → Edit (✏️)**."
+      - "Click **View Profile → Primary Details → Edit ✏️**."
       - "Select your **Group** from the dropdown."
       - "Click **Save**."
     follow_up:
@@ -1457,7 +1457,7 @@ nodes:
     prompt:
       text: "Your **Designation** is not set in Primary Details."
     steps:
-      - "Click **View Profile → Primary Details → Edit (✏️)**."
+      - "Click **View Profile → Primary Details → Edit ✏️**."
       - "Search for your designation in full form (e.g. Section Officer)."
       - "Select the matching designation and click **Save**."
     follow_up:

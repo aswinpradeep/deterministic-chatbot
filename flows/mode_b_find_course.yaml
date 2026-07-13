@@ -685,7 +685,7 @@ nodes:
         Please use the link below to access the event and proceed accordingly.
     steps: []
     action_button:
-      label: "🔗 Open Event"
+      label: "🔗 View Event"
       url: "{{ env.KARMAYOGI_PORTAL_BASE_URL }}/app/event-hub/home/{{ ctx.collected.event_id }}"
     follow_up:
       text: "Were you able to find and join the event?"

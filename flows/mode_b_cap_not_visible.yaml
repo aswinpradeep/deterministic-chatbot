@@ -160,7 +160,7 @@ nodes:
     steps:
       - "Log in to **iGOT Karmayogi**."
       - "Click on **View Profile** from the top-right menu."
-      - "Navigate to **Primary Details** and click the ✏️ **Edit (pen) icon**."
+      - "Navigate to **Primary Details** and click the ✏️ **Edit icon**."
       - "Update your details and click **Send for Approval**."
       - "The request will be sent to your **MDO Admin** for approval."
     next: closure_not_verified
@@ -569,7 +569,7 @@ nodes:
     steps:
       - "Log in to iGOT Karmayogi."
       - "Click on the **Profile Icon** and select **View Profile**."
-      - "Navigate to **Primary Details** and click the ✏️ **Edit (pen) icon**."
+      - "Navigate to **Primary Details** and click the ✏️ **Edit icon**."
       - "Update your Designation and click **Send for Approval**."
       - "Once submitted, the request will be sent to the **Organization Admin** for approval. Once approved, your designation will reflect in your profile, and you can check if the Comprehensive Assessment Program (CAP) is visible."
     next: satisfied
@@ -584,7 +584,7 @@ nodes:
     steps:
       - "Log in to iGOT Karmayogi."
       - "Click on the **Profile Icon** and select **View Profile**."
-      - "Navigate to **Primary Details** and click the ✏️ **Edit (pen) icon**."
+      - "Navigate to **Primary Details** and click the ✏️ **Edit icon**."
       - "Update the incorrect fields and click **Send for Approval**."
       - "Once submitted, the request will be sent to the **Organization Admin** for approval. Once approved, your details will reflect in your profile, and you can check if the Comprehensive Assessment Program (CAP) is visible."
     next: satisfied
