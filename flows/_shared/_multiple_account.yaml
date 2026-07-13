@@ -221,7 +221,7 @@ nodes:
 
         Please contact your **MDO Leader** for further clarification and to request domain addition:
 
-        👤 **{{ ctx.collected.mdo_leader_name or ctx.collected.mdo_leader_name_fallback }} {{ ctx.collected.mdo_leader_surname or '' }}**
+        👤 **{{ ctx.collected.mdo_leader_name or ctx.collected.mdo_leader_name_fallback }}{{ (' ' ~ ctx.collected.mdo_leader_surname) if ctx.collected.mdo_leader_surname else '' }}**
         📧 {{ ctx.collected.mdo_leader_email or ctx.collected.mdo_leader_email_fallback }}
     next: satisfied
 
@@ -511,7 +511,7 @@ nodes:
       text: |
         If you're not receiving the OTP, please connect with the contact below for further assistance:
 
-        👤 **{{ ctx.collected.mdo_leader_name or ctx.collected.mdo_leader_name_fallback }} {{ ctx.collected.mdo_leader_surname or '' }}**
+        👤 **{{ ctx.collected.mdo_leader_name or ctx.collected.mdo_leader_name_fallback }}{{ (' ' ~ ctx.collected.mdo_leader_surname) if ctx.collected.mdo_leader_surname else '' }}**
         📧 {{ ctx.collected.mdo_leader_email or ctx.collected.mdo_leader_email_fallback }}
     next: satisfied
 
