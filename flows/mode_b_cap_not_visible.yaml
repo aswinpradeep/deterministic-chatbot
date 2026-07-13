@@ -198,20 +198,19 @@ nodes:
       yes: fetch_assigned_courses
       no: ask_incorrect_field_full
 
-  # SOP §1.4.2 — no "Central Deputation" option here; the SOP's incorrect-field
-  # list for this screen is Organization/Designation/Group/Cadre/Service/Batch only.
   - id: ask_incorrect_field_full
     type: message
     prompt:
       text: |
         Kindly let us know which of the following details are incorrect:
     quick_replies:
-      - { id: org,     label: "🏢 Organization" }
-      - { id: desig,   label: "📋 Designation" }
-      - { id: group,   label: "👥 Group" }
-      - { id: cadre,   label: "🏛️ Cadre" }
-      - { id: service, label: "🎖️ Service" }
-      - { id: batch,   label: "📅 Batch" }
+      - { id: org,      label: "🏢 Organization" }
+      - { id: desig,    label: "📋 Designation" }
+      - { id: group,    label: "👥 Group" }
+      - { id: cadre,    label: "🏛️ Cadre" }
+      - { id: service,  label: "🎖️ Service" }
+      - { id: batch,    label: "📅 Batch" }
+      - { id: central_deputation, label: "🏛️ Central Deputation" }
     disable_input: true
     on_reply:
       org:     guide_transfer_request
@@ -220,6 +219,7 @@ nodes:
       cadre:   guide_profile_update
       service: guide_profile_update
       batch:   guide_profile_update
+      central_deputation: guide_profile_update
 
   - id: fetch_assigned_courses
     type: api_call
@@ -799,7 +799,7 @@ nodes:
   - id: pick_pending_course
     type: collect
     prompt:
-      text: "Please select the course and pending resource you would like to complete:"
+      text: "Please select the course and resource you're facing an issue with:"
       title: "Select Course"
       placeholder: "Search your enrolled courses..."
     field:
@@ -809,19 +809,38 @@ nodes:
     dynamic_options:
       source: context
       context_key: collected.cap_incomplete_courses_picker
-      # id_field uses courseName (not courseId) for the picker's key: every
-      # pending resource under the same course was previously built with the
-      # SAME courseId (the parent course's id), so the picker collapsed all
-      # sibling resources under one course down to a single selectable entry.
-      # Resource names are unique within a course, so keying on courseName
-      # keeps each resource distinct. extra_fields restores the real course
-      # DO_ID into selected_pending_course_id on pick, since that's still
-      # needed by share_pending_resource_link's "open course" URL below.
+      # Each resource under a course now carries its own unique identifier
+      # (courseId here) plus its real status (resourceStatus) and the
+      # parent course's id (parentCourseId) — see nested_cap_incomplete_courses.
+      # extra_fields restores parentCourseId into selected_pending_course_id
+      # since that's still what share_pending_resource_link's "open course"
+      # URL needs, regardless of which specific resource was picked.
       response_mapping:
-        id_field: courseName
+        id_field: courseId
         label_field: courseName
         extra_fields:
-          - { from: courseId, to: collected.selected_pending_course_id }
+          - { from: parentCourseId, to: collected.selected_pending_course_id }
+          - { from: courseName,     to: collected.selected_resource_name }
+          - { from: resourceStatus, to: collected.selected_resource_status }
+    next: branch_selected_resource_status
+
+  - id: branch_selected_resource_status
+    type: branch
+    rules:
+      - if: "ctx.collected.selected_resource_status == 'Completed'"
+        then: resource_already_completed
+    default: resource_not_completed_info
+
+  - id: resource_already_completed
+    type: message
+    prompt:
+      text: "We checked, and found that **{{ ctx.collected.selected_resource_name }}** is already marked as completed in our system."
+    next: satisfied
+
+  - id: resource_not_completed_info
+    type: message
+    prompt:
+      text: "We checked, and found that **{{ ctx.collected.selected_resource_name }}** is not completed yet."
     next: share_pending_resource_link
 
   - id: share_pending_resource_link
@@ -974,7 +993,29 @@ nodes:
     rules:
       - if: "ctx.collected.issued_certificates != None and len(ctx.collected.issued_certificates) > 0"
         then: resolution_cap_already_complete
-    default: api_read_cap_limit_content
+    default: fetch_cap_limit_enrollments
+
+  # A CAP container's own enrollment record never carries its child course's
+  # resource-level langContentStatus — that lives on the CHILD COURSE's own
+  # enrollment record. Fetching every enrollment here (not just the CAP's own)
+  # lets api_read_cap_limit_content correctly detect resources that are already
+  # completed under the child course instead of showing everything as pending.
+  - id: fetch_cap_limit_enrollments
+    type: api_call
+    integration: karmayogi
+    request:
+      method: POST
+      url: "/api/course/private/v4/user/enrollment/list/{{ ctx.user_id_hash }}"
+      body:
+        request:
+          filters:
+            status: ["0", "1", "2"]
+    response_mapping:
+      - { from: "$.courses", to: collected.cap_limit_all_enrollment_list }
+    on_success: api_read_cap_limit_content
+    on_error:
+      any: api_read_cap_limit_content
+    timeout_ms: 8000
 
   - id: api_read_cap_limit_content
     type: api_call
@@ -985,7 +1026,7 @@ nodes:
     response_mapping:
       - { from: "$.content.primaryCategory", to: collected.cap_limit_primary_category }
       - { from: "$.content.mimeType",        to: collected.cap_limit_mime_type }
-      - { from: "$.content.leafNodes",       to: collected.cap_limit_incomplete_leaf_nodes, transform: diff_leaf_nodes, transform_ctx_key: collected.completed_ids }
+      - { from: "$.content.leafNodes",       to: collected.cap_limit_incomplete_leaf_nodes, transform: diff_leaf_nodes_cross_enrollment, transform_ctx_key: collected.cap_limit_all_enrollment_list }
       - { from: "$.content.leafNodes",       to: collected.cap_limit_raw_leaf_nodes }
       - { from: "$.content.children",        to: collected.cap_limit_child_ids, transform: extract_child_course_ids }
     on_success: branch_on_cap_limit_content_type
@@ -1007,7 +1048,7 @@ nodes:
       method: GET
       url: "/api/private/content/v3/hierarchy/{{ ctx.collected.course_id }}"
     response_mapping:
-      - { from: "$.content.leafNodes", to: collected.cap_limit_incomplete_leaf_nodes, transform: diff_leaf_nodes, transform_ctx_key: collected.completed_ids }
+      - { from: "$.content.leafNodes", to: collected.cap_limit_incomplete_leaf_nodes, transform: diff_leaf_nodes_cross_enrollment, transform_ctx_key: collected.cap_limit_all_enrollment_list }
       - { from: "$.content.leafNodes", to: collected.cap_limit_raw_leaf_nodes }
       - { from: "$.content.children",  to: collected.cap_limit_child_ids, transform: extract_child_course_ids }
     on_success: branch_on_cap_limit_incomplete_ids

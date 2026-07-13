@@ -336,7 +336,7 @@ nodes:
       # batchId may be null/undefined for in-progress courses that haven't been
       # assigned to a batch yet — fall through to the next documented step rather
       # than dead-ending the conversation.
-      any: api_read_course_content
+      any: fetch_all_enrollments_for_diff
     timeout_ms: 8000
 
   # ===========================================================================
@@ -368,7 +368,7 @@ nodes:
           then: confirm_technical_issue }
       - { if: "ctx.collected.completion_pct == 100",
           then: branch_certificate_not_generated }
-    default: api_read_course_content
+    default: fetch_all_enrollments_for_diff
 
   # ===========================================================================
   # STEP 6 — Technical Issue Found → Obtain User Confirmation (SOP 6.1.1)
@@ -431,7 +431,31 @@ nodes:
   # 7.1 Identify the pending resource(s)
   # 7.2 Proceed to determine the resource type (SCORM / Non-SCORM / Assessment)
   # Cross-check leaf nodes using content/read API against completed_ids
+  #
+  # A container course (e.g. a CAP) whose own enrollment record never carries
+  # its child course's resource-level langContentStatus would otherwise show
+  # every leaf node as incomplete — its own completed_ids is always empty
+  # even when the nested child course is 100% done. fetch_all_enrollments_for_diff
+  # fetches every enrollment first so the diff below can pick up completion
+  # recorded on a nested child course's own record too.
   # ===========================================================================
+  - id: fetch_all_enrollments_for_diff
+    type: api_call
+    integration: karmayogi
+    request:
+      method: POST
+      url: "/api/course/private/v4/user/enrollment/list/{{ ctx.user_id_hash }}"
+      body:
+        request:
+          filters:
+            status: ["0", "1", "2"]
+    response_mapping:
+      - { from: "$.courses", to: collected.all_enrollment_list_for_diff }
+    on_success: api_read_course_content
+    on_error:
+      any: api_read_course_content
+    timeout_ms: 8000
+
   - id: api_read_course_content
     type: api_call
     integration: karmayogi
@@ -445,8 +469,8 @@ nodes:
       # hence $.content.leafNodes is the correct path after unwrapping.
       - { from: "$.content.leafNodes",
           to:   collected.incomplete_ids,
-          transform: diff_leaf_nodes,
-          transform_ctx_key: collected.completed_ids }
+          transform: diff_leaf_nodes_cross_enrollment,
+          transform_ctx_key: collected.all_enrollment_list_for_diff }
     on_success: branch_on_leaf_ids_available
     on_error:
       any: api_fetch_resource_metadata
@@ -951,7 +975,7 @@ nodes:
           transform: extract_consumption_records }
     on_success: branch_remark_technical_issue
     on_error:
-      any: api_read_course_content
+      any: fetch_all_enrollments_for_diff
     timeout_ms: 8000
 
   # Remark 2 — Scenario A: Technical issue found again (Section 13.2.2)
