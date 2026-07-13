@@ -14,9 +14,9 @@
 #             → API error    → error message
 #
 #   STEP 2  POST /private/user/v1/search   (pending request path only)
-#             filters: channel = departmentName, role = MDO_LEADER
-#             → MDO_LEADER found  → show admin contact
-#             → MDO_LEADER absent → YP lookup (in-memory Excel)
+#             filters: channel = departmentName, role = MDO_ADMIN
+#             → MDO_ADMIN found  → show admin contact
+#             → MDO_ADMIN absent → YP lookup (in-memory Excel)
 #             → API 401/403/404   → YP lookup (in-memory Excel)
 #
 #   YP FALLBACK (Global Rule — no admin available)
@@ -157,7 +157,7 @@ nodes:
 
   # ===========================================================================
   # STEP 2 — POST /private/user/v1/search
-  #           MDO_LEADER lookup for transfer target department
+  #           MDO_ADMIN lookup for transfer target department
   #           Runs ONLY on pending request path
   # ===========================================================================
 
@@ -172,7 +172,7 @@ nodes:
           query: ""
           filters:
             channel: "{{ ctx.collected.transfer_dept_name }}"
-            organisations.roles: ["MDO_LEADER"]
+            organisations.roles: ["MDO_ADMIN"]
             status: 1
           limit: 1
     response_mapping:
@@ -352,7 +352,7 @@ nodes:
     # Still no pending request → guide to resubmit (§1.3.2 / §1.4.2)
 
   # ===========================================================================
-  # §1.4.1 — Request now found after recheck → MDO_LEADER lookup (STEP 2 again)
+  # §1.4.1 — Request now found after recheck → MDO_ADMIN lookup (STEP 2 again)
   # ===========================================================================
 
   - id: lookup_mdo_leader_recheck
@@ -366,7 +366,7 @@ nodes:
           query: ""
           filters:
             channel: "{{ ctx.collected.transfer_dept_name }}"
-            organisations.roles: ["MDO_LEADER"]
+            organisations.roles: ["MDO_ADMIN"]
             status: 1
           limit: 1
     response_mapping:

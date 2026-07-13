@@ -16,8 +16,16 @@
 #   3. SPARROW/APAR  (implemented)
 #
 # APIs used:
-#   GET  /api/user/private/v1/read/{user_id}   (eHRMS ID at profileDetails.additionalProperties.externalSystemId)
-#   POST /api/private/user/v1/search            (via _mdo_admin_lookup — MDO admin details)
+#   eHRMS section:
+#     POST /api/private/user/v1/search                                  — eHRMS ID + External System Name, org/channel, rootOrgId
+#     POST /api/private/user/v1/search   (via _mdo_admin_lookup)         — MDO admin details when eHRMS ID/Ext. System Name missing
+#
+#   SPARROW/APAR section:
+#     POST /api/private/user/v1/search                                  — basic profile (org, channel, verification status)
+#     GET  /api/user/private/v1/read/{user_id}                          — full profile (designation, group, cadre/service/batch/central deputation)
+#     POST /api/supportportal/admin/user/v2/assignedcourses/{user_id}   — assigned CAP courses (courseCategory: "Comprehensive Assessment Program")
+#     GET  /api/supportportal/cbplan/v2/admin/user/list/{user_id}       — CBP Plans (each flagged isApar true/false; APAR picker filters on this)
+#     POST /api/course/private/v4/user/enrollment/list/{user_id}        — completed courses, to verify the selected course is actually done
 #
 # Field note: 'externalSystem' is the assumed key for External System Name under
 #   additionalProperties. Verify against live API before deploying.

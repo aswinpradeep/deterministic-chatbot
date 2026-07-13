@@ -520,6 +520,35 @@ def _diff_leaf_nodes(leaf_nodes: Any, completed_ids: Any) -> list[str]:
     return [rid for rid in leaf_nodes if rid not in done]
 
 
+def _diff_leaf_nodes_cross_enrollment(leaf_nodes: Any, all_enrollment_list: Any) -> list[str]:
+    """Return leaf node IDs not completed anywhere across the user's enrollments.
+
+    A CAP (Comprehensive Assessment Program) container's own enrollment record
+    never carries its child course's resource-level langContentStatus — that
+    progress lives on the CHILD COURSE's own enrollment record instead, so the
+    CAP record's langContentStatus is always empty even when its child course
+    is 100% done. Scanning langContentStatus across every enrollment (not just
+    the CAP container's own) correctly picks up completion recorded under the
+    child course.
+    """
+    if not isinstance(leaf_nodes, list):
+        return []
+    completed: set[str] = set()
+    if isinstance(all_enrollment_list, list):
+        for course in all_enrollment_list:
+            if not isinstance(course, dict):
+                continue
+            lang_status = course.get("langContentStatus")
+            if not isinstance(lang_status, dict):
+                continue
+            for resources in lang_status.values():
+                if isinstance(resources, dict):
+                    for resource_id, status in resources.items():
+                        if status == 2:
+                            completed.add(resource_id)
+    return [rid for rid in leaf_nodes if rid not in completed]
+
+
 def _extract_all_names(names: Any) -> str:
     """Convert a list of resource names into a newline-separated bullet string.
 
@@ -838,6 +867,13 @@ def _nested_cbp_courses(enrollments: Any, all_courses: Any, is_apar: bool) -> li
     Plans are sorted ascending by due date (endDate) — nearest upcoming due date
     first — so the picker lists the most urgent training plans at the top.
     Plans with a missing/unparseable endDate sort last, in their original order.
+
+    A course can appear in more than one Plan at once, and those Plans can
+    disagree on isApar (e.g. the same course listed under both an APAR-flagged
+    Plan and a Non-APAR-flagged Plan). The portal doesn't show such a course as
+    APAR at all in that case, so any course that also appears in a Plan of the
+    opposite isApar value is excluded here — only courses exclusive to one
+    category are shown as that category.
     """
     if not isinstance(all_courses, list):
         return []
@@ -847,6 +883,20 @@ def _nested_cbp_courses(enrollments: Any, all_courses: Any, is_apar: bool) -> li
         for e in enrollments:
             if isinstance(e, dict) and "courseId" in e:
                 enrollment_map[str(e["courseId"])] = e
+
+    # Course ids that appear in any Plan of the OPPOSITE isApar value —
+    # these are excluded below regardless of also appearing in a matching plan.
+    opposite_category_course_ids: set[str] = set()
+    for plan in all_courses:
+        if not isinstance(plan, dict):
+            continue
+        if bool(plan.get("isApar")) == is_apar:
+            continue
+        for course in (plan.get("contentList") or []):
+            if isinstance(course, dict) and course.get("contentType") == "Course":
+                cid = course.get("identifier")
+                if cid:
+                    opposite_category_course_ids.add(str(cid))
 
     _no_date = datetime.datetime.max.replace(tzinfo=datetime.timezone.utc)
 
@@ -889,6 +939,8 @@ def _nested_cbp_courses(enrollments: Any, all_courses: Any, is_apar: bool) -> li
                 continue
 
             course_id = str(course.get("identifier", ""))
+            if course_id in opposite_category_course_ids:
+                continue
             course_name = str(course.get("name", "Unknown Course"))
 
             enrolled_data = enrollment_map.get(course_id)
@@ -2158,14 +2210,20 @@ def _extract_resources_for_selected_course(cap_content: Any, collected: Any) -> 
 
 
 def _nested_cap_incomplete_courses(cap_content: Any, all_enrollment_list: Any) -> list[dict]:
-    """Extract nested structure: incomplete child courses as parents, and their pending resources as children."""
+    """Extract nested structure: incomplete child courses as parents, with
+    ALL of their resources (completed and pending alike) as children — each
+    tagged with its real status. The picker shows every resource, not just
+    the pending ones; the caller checks the selected resource's own status
+    to decide whether to say "already completed" or show the pending-resource
+    guidance.
+    """
     if not isinstance(cap_content, dict) or not isinstance(all_enrollment_list, list):
         return []
-    
+
     children = cap_content.get("children", [])
     if not children:
         children = [cap_content]
-        
+
     enrollment_map = {}
     for enroll in all_enrollment_list:
         if isinstance(enroll, dict) and "courseId" in enroll:
@@ -2175,10 +2233,10 @@ def _nested_cap_incomplete_courses(cap_content: Any, all_enrollment_list: Any) -
     for child in children:
         if not isinstance(child, dict): continue
         if "assessment" in str(child.get("name", "")).lower(): continue
-        
+
         cid = child.get("identifier")
         if not cid: continue
-        
+
         # Check if course is complete
         is_complete = False
         enroll_data = enrollment_map.get(cid)
@@ -2188,65 +2246,57 @@ def _nested_cap_incomplete_courses(cap_content: Any, all_enrollment_list: Any) -
             certs = enroll_data.get("issuedCertificates")
             if status == 2 or pct == 100 or (isinstance(certs, list) and len(certs) > 0):
                 is_complete = True
-                
+
         if not is_complete:
             course_name = child.get("name") or "Assigned Course"
-            
-            # Find incomplete resources in this child course
-            pending_resources = []
-            if enroll_data and enroll_data.get("langContentStatus"):
-                for module in child.get("children", []):
-                    if not isinstance(module, dict): continue
-                    is_leaf = len(module.get("children", [])) == 0
-                    if is_leaf:
-                        res_complete = False
-                        for _, status_map in enroll_data.get("langContentStatus", {}).items():
-                            if isinstance(status_map, dict) and status_map.get(module.get("identifier")) == 2:
-                                res_complete = True
-                                break
-                        if not res_complete and "assessment" not in str(module.get("name", "")).lower():
-                            pending_resources.append(module.get("name") or "Resource")
-                    else:
-                        for resource in module.get("children", []):
-                            if not isinstance(resource, dict): continue
-                            res_complete = False
-                            for _, status_map in enroll_data.get("langContentStatus", {}).items():
-                                if isinstance(status_map, dict) and status_map.get(resource.get("identifier")) == 2:
-                                    res_complete = True
-                                    break
-                            if not res_complete and "assessment" not in str(resource.get("name", "")).lower():
-                                pending_resources.append(resource.get("name") or "Resource")
-            else:
-                for module in child.get("children", []):
-                    if not isinstance(module, dict): continue
-                    is_leaf = len(module.get("children", [])) == 0
-                    if is_leaf:
-                        if "assessment" not in str(module.get("name", "")).lower():
-                            pending_resources.append(module.get("name") or "Resource")
-                    else:
-                        for resource in module.get("children", []):
-                            if not isinstance(resource, dict): continue
-                            if "assessment" not in str(resource.get("name", "")).lower():
-                                pending_resources.append(resource.get("name") or "Resource")
-            
-            if not pending_resources:
-                pending_resources.append("Complete remaining modules")
-                
-            # Build picker children
+            lang_content_status = (enroll_data or {}).get("langContentStatus") or {}
+
+            def _resource_status(resource_id: str) -> str:
+                for _, status_map in lang_content_status.items():
+                    if isinstance(status_map, dict) and resource_id in status_map:
+                        return "Completed" if status_map.get(resource_id) == 2 else "In Progress"
+                return "Not Started"
+
+            # Collect every resource (identifier, name, status) — not just
+            # the incomplete ones — so the picker can list all of them.
+            all_resources: list[tuple[str, str, str]] = []
+            for module in child.get("children", []):
+                if not isinstance(module, dict): continue
+                if "assessment" in str(module.get("name", "")).lower(): continue
+                is_leaf = len(module.get("children", [])) == 0
+                if is_leaf:
+                    rid = module.get("identifier") or cid
+                    all_resources.append((rid, module.get("name") or "Resource", _resource_status(rid)))
+                else:
+                    for resource in module.get("children", []):
+                        if not isinstance(resource, dict): continue
+                        if "assessment" in str(resource.get("name", "")).lower(): continue
+                        rid = resource.get("identifier") or cid
+                        all_resources.append((rid, resource.get("name") or "Resource", _resource_status(rid)))
+
+            if not all_resources:
+                all_resources.append((cid, "Complete remaining modules", "Not Started"))
+
+            # Build picker children — courseId is now each resource's own
+            # unique identifier; parentCourseId carries the actual course id
+            # forward so share_pending_resource_link can still open the
+            # right course page regardless of which resource was picked.
             children_items = []
-            for rname in pending_resources:
+            for r_id, rname, r_status in all_resources:
                 children_items.append({
-                    "courseId": cid,
-                    "courseName": rname
+                    "courseId": r_id,
+                    "courseName": rname,
+                    "resourceStatus": r_status,
+                    "parentCourseId": cid,
                 })
-                
+
             if children_items:
                 result.append({
                     "courseId": cid,
                     "courseName": course_name,
                     "children": children_items
                 })
-                
+
     return result
 
 
@@ -2264,6 +2314,7 @@ _TRANSFORMS: dict[str, Any] = {
     # is nested inside the batches[] array instead of at the course root level.
     "extract_batch_id":            _extract_batch_id,
     "diff_leaf_nodes":                 _diff_leaf_nodes,
+    "diff_leaf_nodes_cross_enrollment": _diff_leaf_nodes_cross_enrollment,
     "extract_all_names":               _extract_all_names,
     "extract_scorm_resource_name":     _extract_scorm_resource_name,
     "extract_scorm_duration_minutes":  _extract_scorm_duration_minutes,
