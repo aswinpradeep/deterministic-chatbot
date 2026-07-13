@@ -385,7 +385,7 @@ nodes:
 
         1. Go to **View Profile**
         2. Open **Other Details**
-        3. Click the ✏️ **Edit (Pen) Icon** next to the {{ 'Email ID' if ctx.collected.update_type == 'EMAIL' else 'Mobile Number' }} field
+        3. Click the ✏️ **Edit icon** next to the {{ 'Email ID' if ctx.collected.update_type == 'EMAIL' else 'Mobile Number' }} field
         4. Enter the new {{ 'Email ID' if ctx.collected.update_type == 'EMAIL' else 'Mobile Number' }}
         5. Click **Request OTP**
         6. Enter the OTP received

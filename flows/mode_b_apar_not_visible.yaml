@@ -423,7 +423,7 @@ nodes:
     steps:
       - "Log in to **iGOT Karmayogi**."
       - "Click on **View Profile** from the top-right menu."
-      - "Navigate to **Primary Details** and click the ✏️ **Edit (pen) icon**."
+      - "Navigate to **Primary Details** and click the ✏️ **Edit icon**."
       - "Update the correct **Group**, **Designation**, and **Ministry / Department**."
       - "Click **Send for Approval** to submit the changes."
       - "The request will be sent to your **MDO Admin** for approval."
@@ -511,7 +511,7 @@ nodes:
     steps:
       - "Log in to **iGOT Karmayogi**."
       - "Click on **View Profile** from the top-right menu."
-      - "Navigate to **Primary Details** and click the ✏️ **Edit (pen) icon**."
+      - "Navigate to **Primary Details** and click the ✏️ **Edit icon**."
       - "Update the correct **Designation**."
       - "Click **Send for Approval** to submit the changes."
       - "The request will be sent to your **MDO Admin** for approval."
@@ -529,7 +529,7 @@ nodes:
     steps:
       - "Log in to **iGOT Karmayogi**."
       - "Click on **View Profile** from the top-right menu."
-      - "Navigate to **Primary Details** and click the ✏️ **Edit (pen) icon**."
+      - "Navigate to **Primary Details** and click the ✏️ **Edit icon**."
       - "Update the correct **Group** and any other required details."
       - "Click **Send for Approval** to submit the changes."
       - "The request will be sent to your **MDO Admin** for approval."

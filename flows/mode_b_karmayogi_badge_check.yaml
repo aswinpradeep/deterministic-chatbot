@@ -245,7 +245,7 @@ nodes:
         Please follow the steps below to update and submit your designation or group for approval:
     steps:
       - "Click on View Profile."
-      - "Navigate to Primary Details and click the Edit (Pen) icon."
+      - "Navigate to Primary Details and click the Edit icon."
       - "Update the correct Group and Designation."
       - "Click Send for Approval."
       - "Once the request is submitted, it will be sent to the Organization Admin for approval. The designation or group will reflect in your profile after approval."
@@ -371,7 +371,7 @@ nodes:
         Please follow the steps below to submit your designation or group for approval again:
     steps:
       - "Click on View Profile."
-      - "Navigate to Primary Details and click the Edit (Pen) icon."
+      - "Navigate to Primary Details and click the Edit icon."
       - "Update the correct Group and Designation."
       - "Click Send for Approval."
       - "Once the request is submitted, it will be sent to the Organization Admin for approval. The designation or group will reflect in your profile after approval."

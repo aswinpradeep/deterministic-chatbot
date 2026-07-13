@@ -146,7 +146,7 @@ nodes:
     steps:
       - "Log in to **iGOT Karmayogi**."
       - "Click on **View Profile** from the top-right menu."
-      - "Navigate to **Primary Details** and click the ✏️ **Edit (pen) icon**."
+      - "Navigate to **Primary Details** and click the ✏️ **Edit icon**."
       - "Update your details and click **Send for Approval**."
       - "The request will be sent to your **MDO Admin** for approval."
     next: closure_not_verified
@@ -557,7 +557,7 @@ nodes:
     steps:
       - "Log in to iGOT Karmayogi."
       - "Click on the **Profile Icon** and select **View Profile**."
-      - "Navigate to **Primary Details** and click the ✏️ **Edit (pen) icon**."
+      - "Navigate to **Primary Details** and click the ✏️ **Edit icon**."
       - "Update your Designation and click **Send for Approval**."
     next: closure_after_update
 
@@ -571,7 +571,7 @@ nodes:
     steps:
       - "Log in to iGOT Karmayogi."
       - "Click on the **Profile Icon** and select **View Profile**."
-      - "Navigate to **Primary Details** and click the ✏️ **Edit (pen) icon**."
+      - "Navigate to **Primary Details** and click the ✏️ **Edit icon**."
       - "Update the incorrect fields and click **Send for Approval**."
     next: closure_after_update
 
