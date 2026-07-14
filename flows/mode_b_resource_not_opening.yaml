@@ -291,7 +291,7 @@ nodes:
     response_mapping:
       - { from: "$.content.streamingUrl", to: collected.streaming_url }
       - { from: "$.content.artifactUrl",  to: collected.artifact_url }
-      - { from: "$.content.registrationUrl", to: collected.registration_url }
+      - { from: "$.content.previewUrl",   to: collected.preview_url }
     on_success: branch_youtube_config
     on_error:
       any: api_error_fallback
@@ -299,7 +299,7 @@ nodes:
   - id: branch_youtube_config
     type: branch
     rules:
-      - if: "ctx.collected.streaming_url != None and ctx.collected.streaming_url == ctx.collected.artifact_url and ctx.collected.streaming_url == ctx.collected.registration_url"
+      - if: "ctx.collected.streaming_url != None and ctx.collected.streaming_url == ctx.collected.artifact_url and ctx.collected.streaming_url == ctx.collected.preview_url"
         then: ask_youtube_restricted
     default: youtube_config_message
 
