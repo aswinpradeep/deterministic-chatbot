@@ -67,7 +67,7 @@ imports:
       field_prefix:  "c1_"
       next:          c1_read_course_content
       on_empty:      no_courses_found_cert
-      empty_message: 'You do not have any enrolled courses or programs with In-Progress or Completed status.\n\nPlease enrol in a course on the iGOT Karmayogi portal and try again.'
+      empty_message: 'You do not have any enrolled courses or programs.\n\nPlease enrol in a course on the iGOT Karmayogi portal and try again.'
 
 nodes:
 
@@ -298,7 +298,9 @@ nodes:
         The course/program has been completed and more than 24 hours have passed, but the certificate has not been issued yet. You would like us to investigate and issue the certificate.
 
         • **Course Name:** {{ ctx.collected.c1_course_name }}
+
         • **Registered Email ID:** {{ ctx.collected.email }}
+
         • **Mobile Number:** {{ ctx.collected.mobile }}
 
         Please review the details above and confirm whether they are correct.
@@ -676,7 +678,7 @@ nodes:
     type: message
     prompt:
       text: |
-        You do not have any enrolled courses or programs with In-Progress or Completed status.
+        You do not have any enrolled courses or programs.
 
-        Please enrol in a course on the iGOT Karmayogi portal and try again.
+        Please enroll in a course on the iGOT Karmayogi portal and try again.
     next: satisfied

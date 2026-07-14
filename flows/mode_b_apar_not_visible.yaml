@@ -629,6 +629,7 @@ nodes:
         {% endif %}
 
         - **Name:** {{ ctx.collected.mdo_admin_name }}
+
         - **Email ID:** {{ ctx.collected.mdo_admin_email}}
     next: satisfied
 
@@ -649,8 +650,10 @@ nodes:
         {% endif %}
 
         - **Name:** {{ ctx.collected.yp_name}}
+
         - **Email ID:** {{ ctx.collected.yp_email}}
         {%- if ctx.collected.yp_mobile %}
+
         - **Mobile:** {{ ctx.collected.yp_mobile }}
         {%- endif %}
     next: satisfied
