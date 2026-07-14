@@ -332,7 +332,9 @@ async def _resolve_dynamic_options(
                     elif fi_op == "eq":     include = raw_val == fi_val
                     elif fi_op == "neq":    include = raw_val != fi_val
                     elif fi_op == "not_null": include = True
-                elif fi_op == "is_null":   include = True
+                else:
+                    if fi_op == "is_null": include = True
+                    elif fi_op == "neq":   include = True
                 if not include:
                     continue
 
@@ -467,7 +469,9 @@ async def _resolve_dynamic_options(
                 elif fi_op == "eq":     include = raw_val == fi_val
                 elif fi_op == "neq":    include = raw_val != fi_val
                 elif fi_op == "not_null": include = True  # raw_val already not None
-            elif fi_op == "is_null":   include = True   # raw_val is None
+            else:
+                if fi_op == "is_null": include = True
+                elif fi_op == "neq":   include = True
             if not include:
                 continue
         item_id = _item_get(raw, id_field)
