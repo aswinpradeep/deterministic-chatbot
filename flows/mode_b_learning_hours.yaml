@@ -801,7 +801,7 @@ nodes:
         Please refer to the video guide below for instructions on how to fetch iGOT training data into SPARROW APAR:
     action_button:
       label: "📹 How to Fetch iGOT Training Data into SPARROW APAR"
-      url: "https://www.youtube.com/embed/gSMSuFib2n8?si=kJI0a1jLZWJ0jqSD"
+      url: "https://youtu.be/gSMSuFib2n8"
     next: satisfied
 
   # Step 4.3 — APAR/CAP not assigned + MDO found → show MDO details

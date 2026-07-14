@@ -615,8 +615,7 @@ nodes:
     type: message
     prompt:
       text: |
-        I ran into a technical issue while checking your profile.
-        Please try again later or contact support.
+        We're having trouble processing your request right now. Please try again in a few moments.
     next: satisfied
 
   - id: mdo_found_result
@@ -1248,8 +1247,8 @@ nodes:
     type: message
     prompt:
       text: |
-        I'm having trouble fetching the course details right now.
-        
+        We're having trouble processing your request right now. Please try again in a few moments.
+
         If the issue persists, we can raise a support ticket.
     quick_replies:
       - { id: raise, label: "📋 Raise a ticket" }
