@@ -35,6 +35,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import JSONResponse
 
 from langchain_core.messages import HumanMessage
 
@@ -238,7 +239,10 @@ async def submit_turn(
     session = sessions.get(sid)
 
     if session is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"params": {"errmsg": "Your session has expired. Please start a new conversation."}},
+        )
 
     user_id = claims["sub"]
 
