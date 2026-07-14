@@ -30,11 +30,12 @@ from __future__ import annotations
 
 import logging
 import re
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import JSONResponse
 
 from langchain_core.messages import HumanMessage
 
@@ -155,6 +156,7 @@ async def start_session(
         "status": "selecting_category",
         "selected_category": None,
         "ttl_minutes": ttl_minutes,
+        "expires_at": datetime.now(timezone.utc) + timedelta(minutes=ttl_minutes),
         "turn_count": 0,
         "node_path": [],
         # Langfuse trace-chain IDs — updated after every turn so each turn's
@@ -237,8 +239,17 @@ async def submit_turn(
     sessions: dict = request.app.state.sessions
     session = sessions.get(sid)
 
+    _expired_msg = JSONResponse(
+        status_code=status.HTTP_404_NOT_FOUND,
+        content={"params": {"errmsg": "Your session has expired. Please start a new conversation."}},
+    )
+
     if session is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+        return _expired_msg
+
+    if datetime.now(timezone.utc) > session.get("expires_at", datetime.max.replace(tzinfo=timezone.utc)):
+        sessions.pop(sid, None)
+        return _expired_msg
 
     user_id = claims["sub"]
 
@@ -443,6 +454,7 @@ async def submit_turn(
                 pass  # fail-open: flow continues without profile data
 
         session["turn_count"] = session.get("turn_count", 0) + 1
+        session["expires_at"] = datetime.now(timezone.utc) + timedelta(minutes=session["ttl_minutes"])
         lg_config = {"configurable": {"thread_id": sid}}
         _lf_tid_phase1: str | None = None
         _lf_oid_phase1: str | None = None
@@ -636,6 +648,7 @@ async def submit_turn(
         or body.action                                              # action type as last resort
     )
     session["turn_count"] = session.get("turn_count", 0) + 1
+    session["expires_at"] = datetime.now(timezone.utc) + timedelta(minutes=session["ttl_minutes"])
 
     _lf_tid_active: str | None = None
     _lf_oid_active: str | None = None
