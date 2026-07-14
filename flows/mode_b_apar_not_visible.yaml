@@ -721,9 +721,7 @@ nodes:
     type: message
     prompt:
       text: |
-        I'm sorry, I ran into a technical issue while fetching your profile details.
-
-        Please try again after some time — thank you for your patience.
+        We're having trouble processing your request right now. Please try again in a few moments.
     next: satisfied
 
 

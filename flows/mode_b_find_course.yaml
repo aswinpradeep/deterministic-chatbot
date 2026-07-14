@@ -152,7 +152,7 @@ nodes:
       text: |
         **Profile Details Unavailable**
 
-        We're unable to fetch your profile details right now. Please try again in a little while.
+        We're having trouble processing your request right now. Please try again in a few moments.
     quick_replies:
       - { id: retry, label: "🔄 Try again" }
       - { id: done,  label: "✅ Exit" }
