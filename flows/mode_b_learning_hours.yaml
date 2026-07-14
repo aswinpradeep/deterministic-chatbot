@@ -436,11 +436,9 @@ nodes:
     type: message
     prompt:
       text: |
-        We checked, and found that your profile is currently mapped to **{{ ctx.collected.org_name | default('iGOT / Karmayogi Prarambh Trainee') }}**.
+        APAR courses and training plans are assigned only after a user is mapped to the correct department/organization.
 
-        APAR courses and training plans are assigned only after a user is mapped to their correct department/organization. Since your profile isn't mapped to the correct organization yet, no APAR courses or training plans can be assigned at this stage.
-
-        You'll need to raise a **Transfer Request** to move your profile to the appropriate organization.
+        Kindly raise a Transfer Request to move your profile to the appropriate organization.
     next: sp_guide_transfer_request
 
   - id: sp_guide_transfer_request
@@ -501,13 +499,13 @@ nodes:
     type: message
     prompt:
       text: |
-        We checked, and your profile is currently verified with the following details:
+        As checked, your profile is currently verified with the following details:
 
         - **Organization:** {{ ctx.collected.org_name | default(ctx.collected.org_channel) | default('—') }}
         - **Designation:** {{ ctx.collected.user_designation | default('—') }}
         - **Group:** {{ ctx.collected.user_group | default('—') }}
 
-        Could you confirm whether these details are correct?
+        Kindly confirm whether these details are correct.
     quick_replies:
       - { id: YES, label: "✅ Yes, details are correct" }
       - { id: NO,  label: "❌ No, details are incorrect" }
@@ -569,9 +567,7 @@ nodes:
     type: message
     prompt:
       text: |
-        Please update the required profile details and recheck the APAR courses/training plans after the updates are completed.
-
-        Thank you for reaching out! 🙏
+        Kindly update the required profile details and recheck the APAR courses/training plans after the updates are completed.
     next: satisfied
 
   # Step 4.2a — Assigned Courses API: check if any courses are assigned to the user
@@ -662,7 +658,6 @@ nodes:
       body:
         request:
           retiredCoursesEnabled: true
-          status: ["Completed"]
     response_mapping:
       - { from: "$.courses", to: collected.sp_completed_courses }
       - { from: "$.courses", to: collected.sp_apar_picker_list, transform: nested_apar_courses, transform_ctx_key: collected.all_courses }
@@ -683,7 +678,7 @@ nodes:
   - id: sp_pick_cap_course
     type: collect
     prompt:
-      text: "You have multiple CAP courses. Please select the one you're asking about:"
+      text: "Please choose one of the CAP courses below:"
       title: "Select CAP Course"
     field:
       name: collected.sp_selected_course_id
@@ -703,7 +698,7 @@ nodes:
   - id: sp_pick_apar_course
     type: collect
     prompt:
-      text: "You have multiple APAR courses. Please select the one you're asking about:"
+      text: "Please choose one of the APAR courses below:"
       title: "Select APAR Course"
     field:
       name: collected.sp_selected_course_id
@@ -727,7 +722,7 @@ nodes:
       - if: >
           len([1 for c in (ctx.collected.sp_completed_courses or [])
                if c.get('courseId') == ctx.collected.sp_selected_course_id
-               and (c.get('completionPercentage') or 0) == 100]) > 0
+               and (c.get('status') == 2 or str(c.get('status')).lower() == 'completed')]) > 0
         then: sp_ask_time_elapsed
     default: sp_cap_guidance
 
@@ -739,9 +734,9 @@ nodes:
     type: message
     prompt:
       text: |
-        We checked, and found that **{{ ctx.collected.sp_selected_course_name | default('this course') }}** has been assigned; however, the **CAP assessment** has not yet been passed.
+        We checked, and found that **{{ ctx.collected.sp_selected_course_name | default('this course') }}** has not been successfully completed yet.
 
-        Please reattempt and pass the assessment. Reflection in SPARROW/APAR occurs only after successful completion of the required courses and assessment.
+        Reflection in SPARROW/APAR occurs only after successful completion of the required courses and assessments.
     next: satisfied
 
   # Step 4.5.2 / 4.5.3 — Completion found: ask if 24 hours have passed
