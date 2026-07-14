@@ -490,9 +490,12 @@ async def submit_turn(
                         "status": str(result_status),
                     },
                 )
-        except Exception as exc:  # noqa: BLE001
+        except Exception:  # noqa: BLE001
             log.exception("Flow start error for %s", flow_id)
-            raise HTTPException(status_code=500, detail=f"Flow error: {exc}") from exc
+            return JSONResponse(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                content={"params": {"errmsg": "We're having trouble processing your request right now. Please try again in a few moments."}},
+            )
 
         # Update session trace-chain IDs (span just closed, IDs captured above)
         if _lf_tid_phase1:
@@ -582,7 +585,10 @@ async def submit_turn(
 
     flow_id = session.get("flow_id")
     if not flow_id:
-        raise HTTPException(status_code=500, detail="Session has no flow_id")
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"params": {"errmsg": "We're having trouble processing your request right now. Please try again in a few moments."}},
+        )
 
     graphs = getattr(request.app.state, "graphs", {})
     graph = graphs.get(flow_id)
@@ -683,9 +689,12 @@ async def submit_turn(
             if result.get("zoho_ticket_id"):
                 _out["ticket_id"] = result["zoho_ticket_id"]
             tracing.set_span_io(input={"user": _user_label, "node": _current_node}, output=_out)
-    except Exception as exc:  # noqa: BLE001
+    except Exception:  # noqa: BLE001
         log.exception("Flow resume error for session %s", sid)
-        raise HTTPException(status_code=500, detail=f"Flow error: {exc}") from exc
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"params": {"errmsg": "We're having trouble processing your request right now. Please try again in a few moments."}},
+        )
 
     # Advance trace-chain IDs so the next turn links to THIS turn's span
     if _lf_tid_active:
