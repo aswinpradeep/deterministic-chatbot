@@ -42,7 +42,7 @@ nodes:
     type: message
     prompt:
       text: |
-        Currently, there is **no functionality available on our platofrm to unenroll** from an enrolled course, program, or event.
+        Currently, there is **no functionality available on our platform to unenroll** from an enrolled course, program, or event.
 
         You may **continue and complete** the enrolled content.
         Alternatively, you may **ignore the enrolled content** — it will remain in your profile but will not affect your other courses or progress.
