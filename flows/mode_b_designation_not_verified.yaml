@@ -98,6 +98,7 @@ nodes:
       - { from: "$.response.content[0].profileDetails.professionalDetails[0].designation",         to: collected.current_designation }
       - { from: "$.response.content[0].profileDetails.professionalDetails[0].group",               to: collected.current_group }
       - { from: "$.response.content[0].profileDetails.professionalDetails[0].name",                to: collected.current_dept_name }
+      
     on_success: branch_on_verified_status
     on_error:
       any: profile_api_error
@@ -298,7 +299,7 @@ nodes:
     on_reply:
       save_to: collected.submission_attempt
       yes: ask_is_designation_visible
-      no:  yp_not_found
+      no:  show_submission_steps_repeat
 
   # ===========================================================================
   # §1.3 — User submitted but designation still not visible
