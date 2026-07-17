@@ -365,14 +365,7 @@ nodes:
     action_button:
       label: "🔗 Open Course"
       url: "{{ env.KARMAYOGI_PORTAL_BASE_URL }}/app/toc/{{ ctx.collected.course_id }}/overview"
-    follow_up:
-      text: "Were you able to find and enroll in the course?"
-      quick_replies:
-        - { id: yes, label: "✅ Yes, found it" }
-        - { id: no,  label: "❌ No, still facing an issue" }
-    on_reply:
-      yes: satisfied
-      no:  ask_course_name
+    next: satisfied
 
   # ===========================================================================
   # STEP 10 — Multiple results: access check on top result

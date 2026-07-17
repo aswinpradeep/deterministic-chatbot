@@ -597,30 +597,86 @@ nodes:
 
   # SOP 12.2 — If a technical issue is identified during revalidation → Section 6
   # (enrollment status ≠ Admin Content State status for one or more resources)
-  # SOP 12.3 — If no technical issue is identified → escalate internally
+  # SOP 12.3 — If no technical issue is identified AND completion is genuinely 100%
+  #            → escalate internally (certificate should have been generated)
+  # Otherwise (no mismatch, but still < 100% complete) → resources are still pending;
+  # tell the user rather than raising a "certificate not generated" ticket.
   # Both comparisons now use FRESH langContentStatus fetched by api_enrollment_revalidate.
   - id: branch_revalidate_technical_issue
     type: branch
     rules:
       - { if: "compare_enrollment_vs_admin_state(ctx.collected.lang_content_status, ctx.collected.admin_content_states) == True",
           then: confirm_technical_issue }
-    default: resolution_escalate_internally
+      - { if: "ctx.collected.completion_pct == 100",
+          then: resolution_escalate_internally }
+    default: resolution_revalidate_pending_resources
 
-  # SOP 12.3 — No technical issue identified on revalidation → escalate internally
-  # (all resources show as completed on both Enrollment API and Admin Content State API
-  #  but certificate has still not been generated — escalate to the support team)
-  - id: resolution_escalate_internally
+  # No mismatch and still < 100% complete → resource(s) genuinely still incomplete
+  - id: resolution_revalidate_pending_resources
     type: message
     prompt:
       text: |
-        We've completed re-validation of your progress for **{{ ctx.collected.course_name }}**.
+        We've re-validated your progress for **{{ ctx.collected.course_name }}**, and found that the following resource(s) are still **incomplete**:
 
-        No technical issue was identified, but the certificate has still not been generated.
+        {{ ctx.collected.incomplete_resource_names }}
 
-        We're escalating this issue internally to the concerned team for further investigation.
-
-        
+        Please complete the resource(s) above to achieve **100% completion**. Once all resources are completed successfully, the certificate will be generated automatically.
     next: satisfied
+
+  # SOP 12.3 — No technical issue identified on revalidation → escalate internally
+  # (all resources show as completed on both Enrollment API and Admin Content State API
+  #  but certificate has still not been generated — raise a Zoho ticket for the support team)
+  - id: resolution_escalate_internally
+    type: ticket_confirm
+    prompt:
+      text: |
+        **Issue Identified:** Course / Program / Event Progress — Certificate Not Generated
+
+        **Summary of Request:**
+        We've completed re-validation of your progress for **{{ ctx.collected.course_name }}**. No technical issue was identified, but the certificate has still not been generated. You would like us to investigate this issue.
+
+        • **Course / Program / Event:** {{ ctx.collected.course_name or 'Selected content' }}
+
+        Please review the details above and confirm whether they are correct.
+    on_confirm: cert_not_generated_auto_ticket
+    on_cancel: cert_not_generated_declined
+
+  # User declined — close the conversation politely
+  - id: cert_not_generated_declined
+    type: message
+    prompt:
+      text: |
+        Understood.
+    next: satisfied
+
+  # Collect ticket details and raise via the common Zoho ticket creation logic
+  - id: cert_not_generated_auto_ticket
+    type: transfer_llm
+    auto_raise: silent
+    llm_context:
+      include_messages:  true
+      include_collected: true
+      include_flow_meta: true
+    llm_directives:
+      objective: |
+        The user's progress was re-validated for their course/program/event and no technical issue
+        was identified (enrollment status and Admin Content State are aligned and show completion),
+        but the certificate has still not been generated.
+        Generate a Zoho support ticket AND update the Engineering Excel with:
+          - User ID: {{ ctx.user_id_hash }}
+          - Program / Course / Event DO_ID: {{ ctx.collected.course_id }}
+          - Content DO_ID: {{ ctx.collected.content_do_id }}
+        Subject: "Certificate Not Generated After Revalidation — <course_name>"
+        Description: include user_id, course_name, course_id, content_do_id,
+          completion_pct, and user_email.
+      engineering_excel_update:
+        user_id:        "{{ ctx.user_id_hash }}"
+        do_id:          "{{ ctx.collected.course_id }}"
+        content_do_id:  "{{ ctx.collected.content_do_id }}"
+      priority_override: P3
+    on_complete: confirm_ticket
+    on_restart: pick_course_from_list
+    # NOTE: confirm_ticket is provided by the imported _zoho_ticket fragment.
 
   # ===========================================================================
   # STEP 8 — Identify Resource Type (SOP 8.1)
@@ -752,16 +808,7 @@ nodes:
       - "Expand each module using the **“+” icon**."
       - "Check for content items that **do not have a blue tick mark**."
       - "Complete all pending resources until every item displays a **blue tick**."
-    follow_up:
-      text: "Has your issue been resolved? Please let us know if you need any further assistance."
-      quick_replies:
-        - { id: YES,     label: "✅ Yes, progress updated" }
-        - { id: NO,      label: "❌ No, still not updating" }
-        - { id: PENDING, label: "🕐 I'll try and come back" }
-    on_reply:
-      YES:     progress_updated_end
-      NO:      progress_step1_ticket
-      PENDING: progress_pending_end
+    next: satisfied
 
   # ===========================================================================
   # STEP 10 — Non-SCORM Resource Flow
@@ -787,16 +834,10 @@ nodes:
       - "Expand each module using the **“+” icon**."
       - "Check for content items that **do not have a blue tick mark**."
       - "Complete all pending resources until every item displays a **blue tick**."
-    follow_up:
-      text: "Has your issue been resolved? Please let us know if you need any further assistance."
-      quick_replies:
-        - { id: YES,     label: "✅ Yes, progress updated" }
-        - { id: NO,      label: "❌ No, still not updating" }
-        - { id: PENDING, label: "🕐 I'll try and come back" }
-    on_reply:
-      YES:     progress_updated_end
-      NO:      progress_step1_ticket
-      PENDING: progress_pending_end
+    action_button:
+      label: "🔗 View Course"
+      url: "{{ env.KARMAYOGI_PORTAL_BASE_URL }}/app/toc/{{ ctx.collected.course_id }}/overview"
+    next: satisfied
 
   # ===========================================================================
   # STEP 11 — Assessment Flow
@@ -1127,66 +1168,6 @@ nodes:
 
         We apologise for the inconvenience. 
     next: satisfied
-
-  # ===========================================================================
-  # Post-resolution check
-  # ===========================================================================
-  - id: progress_resolution_check
-    type: message
-    prompt:
-      text: "Did this resolve your course progress issue?"
-    quick_replies:
-      - { id: yes, label: "✅ Yes, resolved" }
-      - { id: no,  label: "❌ No, still facing issue" }
-    disable_input: true
-    on_reply:
-      yes: satisfied
-      no:  progress_step1_ticket
-
-  - id: progress_step1_ticket
-    type: ticket_confirm
-    prompt:
-      text: |
-        **Issue Identified:** Course / Program / Event Progress Issue
-
-        **Summary of Request:**
-        You reported that your progress issue could not be resolved through self-service steps. You would like us to investigate this issue further.
-        
-        • **Course / Program / Event:** {{ ctx.collected.course_name or 'Selected content' }}
-
-        Please review the details above and confirm whether they are correct.
-    on_confirm: progress_auto_ticket
-    on_cancel: satisfied
-
-  # ===========================================================================
-  # Escalation — collect email then auto-generate ticket
-  # ===========================================================================
-  - id: progress_auto_ticket
-    type: transfer_llm
-    auto_raise: silent
-    llm_context:
-      include_messages:  true
-      include_collected: true
-      include_flow_meta: true
-    llm_directives:
-      objective: |
-        The user has a course/program/event progress issue that was not resolved through self-service.
-        Generate a Zoho support ticket AND update the Engineering Excel with:
-          - User ID: {{ ctx.user_id_hash }}
-          - Program / Course / Event DO_ID: {{ ctx.collected.course_id }}
-          - Content DO_ID: {{ ctx.collected.content_do_id }}
-        Subject: "Course Progress Issue — <course_name>"
-        Description: include course_name, course_id, completion_pct,
-          incomplete_resource_names, has_scorm_resources, all_resources_assessment,
-          admin_content_states mismatch details (if any), and user_email.
-        Summary of resolution steps attempted.
-      engineering_excel_update:
-        user_id:        "{{ ctx.user_id_hash }}"
-        do_id:          "{{ ctx.collected.course_id }}"
-        content_do_id:  "{{ ctx.collected.content_do_id }}"
-      priority_override: P3
-    on_complete: confirm_ticket
-    on_restart: pick_course_from_list
 
   # Generic API error fallback — transient errors only; no ticket escalation here.
   # The user can retry by selecting a different content or restarting the flow.
