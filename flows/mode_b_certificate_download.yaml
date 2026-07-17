@@ -158,6 +158,9 @@ nodes:
         4. Expand each module (click the **+** icon)
         5. Complete all items without a blue tick mark
         6. Once all modules show a blue tick, the certificate generates within 24 hours
+    action_button:
+      label: "🔗 View Course"
+      url: "{{ env.KARMAYOGI_PORTAL_BASE_URL }}/app/toc/{{ ctx.collected.c1_course_id }}/overview"
     next: satisfied
 
   # Course completed — check timing

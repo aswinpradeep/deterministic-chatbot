@@ -834,6 +834,9 @@ nodes:
       - "Expand each module using the **“+” icon**."
       - "Check for content items that **do not have a blue tick mark**."
       - "Complete all pending resources until every item displays a **blue tick**."
+    action_button:
+      label: "🔗 View Course"
+      url: "{{ env.KARMAYOGI_PORTAL_BASE_URL }}/app/toc/{{ ctx.collected.course_id }}/overview"
     next: satisfied
 
   # ===========================================================================
