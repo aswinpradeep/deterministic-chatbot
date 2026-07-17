@@ -62,7 +62,16 @@ curl -X POST \
 | `result.response.content[0].profileDetails.professionalDetails[0].group` | User's current group |
 | `result.response.content[0].profileDetails.professionalDetails[0].name` | User's current department/org name |
 | `result.response.content[0].profileDetails.profileDesignationStatus` | Raw designation status (PENDING / VERIFIED / NOT_VERIFIED) |
+| `result.response.content[0].profileDetails.profileGroupStatus` | Raw group status (PENDING / VERIFIED / NOT_VERIFIED) |
+| `result.response.content[0].profileDetails.profileStatus` | Overall profile verification status (PENDING / VERIFIED / NOT_VERIFIED) |
 | `result.response.content[0].channel` | Fallback org/department name if professionalDetails is absent |
+
+### Decision — Is the profile already verified? (SOP §1.1)
+
+| Condition | Outcome |
+|---|---|
+| `profileStatus == VERIFIED` (or both `profileDesignationStatus == VERIFIED` and `profileGroupStatus == VERIFIED`), designation/group/department details are present, and no `wfTransferRequest` is pending | Profile already verified — show green-tick confirmation; close conversation |
+| Otherwise | Not (fully) verified — continue to Decision After Step 1 below |
 
 ### Decision After Step 1
 
