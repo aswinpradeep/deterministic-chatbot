@@ -511,9 +511,7 @@ nodes:
       url: "/api/user/private/v1/read/{{ ctx.user_id_hash }}"
     response_mapping:
       - { from: "$.response.firstName",                                 to: collected.c3_first_name }
-      - { from: "$.response.lastName",                                  to: collected.c3_last_name }
       - { from: "$.response.profileDetails.personalDetails.firstname",  to: collected.c3_pd_firstname }
-      - { from: "$.response.profileDetails.personalDetails.surname",    to: collected.c3_pd_surname }
     on_success: c3_confirm_name
     on_error:
       any: resolution_generic
@@ -526,7 +524,7 @@ nodes:
       text: |
         We checked, and found that your current profile name is:
 
-        Name: **{{ ctx.collected.c3_first_name or ctx.collected.c3_pd_firstname }} {{ ctx.collected.c3_last_name or ctx.collected.c3_pd_surname }}**
+        Name: **{{ ctx.collected.c3_first_name or ctx.collected.c3_pd_firstname }}**
 
         Could you confirm whether this name is correct?
     quick_replies:

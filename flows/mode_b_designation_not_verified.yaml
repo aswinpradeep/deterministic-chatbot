@@ -160,7 +160,7 @@ nodes:
     next: satisfied
 
   # ===========================================================================
-  # Branch — does a pending transfer/designation request exist?
+  # Branch — does a pending transfer/transfer request exist?
   # Decision: wfId present OR departmentName present → has_pending_request = true
   # ===========================================================================
 
@@ -221,7 +221,7 @@ nodes:
     type: message
     prompt:
       text: |
-        Your designation request has already been submitted and is awaiting approval from the Organization Admin. 
+        Your transfer request has already been submitted and is awaiting approval from the Organization Admin. 
         
         Please contact the below admin for further assistance: 
         Admin Name: {{ ctx.collected.mdo_leader_name or ctx.collected.mdo_leader_name_fallback }}
@@ -240,7 +240,7 @@ nodes:
     type: message
     prompt:
       text: |
-        Your designation request has already been submitted. However, there is currently no Organization Admin available to approve the request. 
+        Your transfer request has already been submitted. However, there is currently no Organization Admin available to approve the request. 
         
         Please connect with the concerned YP for further assistance.
         YP Name: {{ ctx.collected.yp_name }}
@@ -251,7 +251,7 @@ nodes:
     type: ticket_confirm
     prompt:
       text: |
-        We checked, and found that your designation request has already been submitted, but there is currently no Organization Admin or YP contact available for your organization to assist with approval.
+        We checked, and found that your transfer request has already been submitted, but there is currently no Organization Admin or YP contact available for your organization to assist with approval.
 
         This needs further investigation from our support team. Would you like us to create a support ticket for this issue?
     on_confirm: yp_not_found_ticket_summary
@@ -264,7 +264,7 @@ nodes:
         **Issue Identified:** Designation / Group Verification — No Admin or YP Contact Found
 
         **Summary of Request:**
-        Your designation request has already been submitted, but there is currently no Organization Admin available to approve it, and we could not locate a YP contact for your organization either. You would like us to investigate this further.
+        Your transfer request has already been submitted, but there is currently no Organization Admin available to approve it, and we could not locate a YP contact for your organization either. You would like us to investigate this further.
 
         • **Organization:** {{ ctx.collected.org_channel | default('Not identified') }}
 
